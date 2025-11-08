@@ -1,4 +1,4 @@
-// pages/match.tsx (修正済み・全体)
+// pages/match.tsx (エラー修正版)
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import axios from 'axios';
@@ -12,13 +12,17 @@ interface UserProfile {
   bio: string | null;
 }
 
-interface SelectedArtist {
-  id: string;
-  name: string;
-  image: string | null;
-}
+// ▼▼▼ 削除 ▼▼▼
+// interface SelectedArtist {
+//   id: string;
+//   name: string;
+//   image: string | null;
+// }
+// ▲▲▲ 削除 ▲▲▲
 
-type MatchTab = 'profile' | 'artists';
+// ▼▼▼ 削除 ▼▼▼
+// type MatchTab = 'profile' | 'artists';
+// ▲▲▲ 削除 ▲▲▲
 
 // ▼ 新しい MatchResult の型 (APIレスポンスに合わせる)
 interface MatchResult {
@@ -40,16 +44,16 @@ export default function Match() {
   const { access_token } = router.query as { access_token?: string };
 
   const [profile, setProfile] = useState<SpotifyProfile | null>(null);
-  // const [artists, setArtists] = useState<SpotifyArtist[]>([]);
-  // const [selectedArtists, setSelectedArtists] = useState<SelectedArtist[]>([]);
-  // const [calculatedArtists, setCalculatedArtists] = useState<SelectedArtist[]>([]);
-  // const [isEditingArtists, setIsEditingArtists] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [nickname, setNickname] = useState<string>('');
   const [profileImageUrl, setProfileImageUrl] = useState<string>('');
   const [bio, setBio] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<MatchTab>('profile');
+  
+  // ▼▼▼ 削除 ▼▼▼
+  // const [activeTab, setActiveTab] = useState<MatchTab>('profile');
+  // ▲▲▲ 削除 ▲▲▲
+
   const [isNewUser, setIsNewUser] = useState<boolean>(true);
   const [isEditingProfile, setIsEditingProfile] = useState<boolean>(false);
   
@@ -70,12 +74,9 @@ export default function Match() {
         const profileData = await getMyProfile(access_token);
         setProfile(profileData);
 
-        // ▼▼▼ API呼び出しを変更 ▼▼▼
         const existingProfileRes = await axios.get<{ profile: UserProfile | null }>(
             `/api/profile/get?spotifyUserId=${profileData.id}`
         );
-        // (artists/get の呼び出しは削除)
-        // ▲▲▲ 変更 ▲▲▲
 
         const existingProfile = existingProfileRes.data.profile;
 
@@ -85,12 +86,10 @@ export default function Match() {
             setBio(existingProfile.bio || '');
             setIsNewUser(false);
             
-            // ▼▼▼ 新しいマッチングAPIを呼び出す ▼▼▼
             const matchRes = await axios.post('/api/match/get-recommendations', { 
                 spotifyUserId: profileData.id 
             });
             setMatches(matchRes.data.matches);
-            // ▲▲▲ 変更 ▲▲▲
         } else {
             setNickname(profileData.display_name || '');
             setProfileImageUrl(profileData.images?.[0]?.url || '');
@@ -121,12 +120,10 @@ export default function Match() {
     setFollowingInProgress(prev => new Set(prev).add(targetUserId));
     try {
       if (!profile) throw new Error('Profile not loaded');
-      // --- 🔽 API呼び出し (ステップ3で作成) ---
       await axios.post('/api/follow/request', {
         targetUserId: targetUserId,
         selfSpotifyId: profile.id
       });
-      // --- 🔼 API呼び出し ---
       alert(`ユーザー: ${targetUserId} にフォローリクエストを送信しました。`);
       // TODO: UIを「リクエスト済み」に変更 (例: followingInProgress を使ってボタン表示を切り替える)
     } catch (err: unknown) { // unknown 型を使用
@@ -147,14 +144,6 @@ export default function Match() {
         return next;
       });
     }
-     // (デモ用にすぐ解除する場合)
-    // setTimeout(() => {
-    //     setFollowingInProgress(prev => {
-    //         const next = new Set(prev);
-    //         next.delete(targetUserId);
-    //         return next;
-    //       });
-    // }, 1000);
   };
 
   
@@ -168,10 +157,8 @@ export default function Match() {
         nickname, 
         profileImageUrl, 
         bio,
-        // ▼▼▼ この行を追加 ▼▼▼
         accessToken: access_token, 
-        // ▲▲▲ この行を追加 ▲▲▲
-      }); //
+      }); 
       alert(isNewUser ? 'プロフィールを登録しました！' : 'プロフィールを更新しました！');
       setIsNewUser(false); setIsEditingProfile(false);
     } catch (e: unknown) { // unknown 型を使用
@@ -193,21 +180,31 @@ export default function Match() {
   if (loading) return <div className="flex justify-center items-center min-h-screen">データをロード中...</div>;
   if (error) return <div className="flex justify-center items-center min-h-screen text-red-500">{error}</div>;
 
-  const ProfileEditor = () => (/* ... (変更なし) ... */ <div className="p-4 max-w-xl mx-auto bg-gray-800 rounded-lg shadow-md mt-4"> <h2 className="text-xl font-bold text-white mb-4"> {isNewUser ? 'プロフィール登録' : 'プロフィール編集'} </h2> <form onSubmit={handleProfileSubmit} className="space-y-4"> <div> <label htmlFor="nickname" className="block text-white text-sm font-bold mb-2">ニックネーム <span className="text-red-500">*</span></label> <input type="text" id="nickname" className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" value={nickname} onChange={(e) => setNickname(e.target.value)} required /> </div> <div> <label htmlFor="profileImageUrl" className="block text-white text-sm font-bold mb-2">プロフィール画像URL (任意)</label> <input type="url" id="profileImageUrl" className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" value={profileImageUrl} onChange={(e) => setProfileImageUrl(e.target.value)} placeholder="例: http://example.com/your-image.jpg" /> {profileImageUrl && <Image src={profileImageUrl} alt="Preview" width={96} height={96} className="mt-2 w-24 h-24 object-cover rounded-full" />} </div> <div> <label htmlFor="bio" className="block text-white text-sm font-bold mb-2">自己紹介文 (任意)</label> <textarea id="bio" className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline h-24 resize-none" value={bio} onChange={(e) => setBio(e.target.value)} placeholder="あなたの好きな音楽のジャンルや、活動していることなど"></textarea> </div> <div className="flex justify-between"> <button type="submit" className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" disabled={loading}> {loading ? '保存中...' : (isNewUser ? 'プロフィールを登録' : '更新を保存')} </button> {isEditingProfile && !isNewUser && ( <button type="button" onClick={() => setIsEditingProfile(false)} className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" disabled={loading}> キャンセル </button> )} </div> </form> </div>);
+  const ProfileEditor = () => ( <div className="p-4 max-w-xl mx-auto bg-gray-800 rounded-lg shadow-md mt-4"> <h2 className="text-xl font-bold text-white mb-4"> {isNewUser ? 'プロフィール登録' : 'プロフィール編集'} </h2> <form onSubmit={handleProfileSubmit} className="space-y-4"> <div> <label htmlFor="nickname" className="block text-white text-sm font-bold mb-2">ニックネーム <span className="text-red-500">*</span></label> <input type="text" id="nickname" className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" value={nickname} onChange={(e) => setNickname(e.target.value)} required /> </div> <div> <label htmlFor="profileImageUrl" className="block text-white text-sm font-bold mb-2">プロフィール画像URL (任意)</label> <input type="url" id="profileImageUrl" className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" value={profileImageUrl} onChange={(e) => setProfileImageUrl(e.target.value)} placeholder="例: http://example.com/your-image.jpg" /> {profileImageUrl && <Image src={profileImageUrl} alt="Preview" width={96} height={96} className="mt-2 w-24 h-24 object-cover rounded-full" />} </div> <div> <label htmlFor="bio" className="block text-white text-sm font-bold mb-2">自己紹介文 (任意)</label> <textarea id="bio" className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline h-24 resize-none" value={bio} onChange={(e) => setBio(e.target.value)} placeholder="あなたの好きな音楽のジャンルや、活動していることなど"></textarea> </div> <div className="flex justify-between"> <button type="submit" className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" disabled={loading}> {loading ? '保存中...' : (isNewUser ? 'プロフィールを登録' : '更新を保存')} </button> {isEditingProfile && !isNewUser && ( <button type="button" onClick={() => setIsEditingProfile(false)} className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" disabled={loading}> キャンセル </button> )} </div> </form> </div>);
   
 
   if (isNewUser) return <div className="p-4 max-w-2xl mx-auto"><h1 className="text-3xl font-bold text-white mb-6 mt-8 text-center">👋 ようこそ！プロフィールを登録してください</h1><ProfileEditor /></div>;
   
+  if (isEditingProfile) {
+      return (
+          <div className="p-4 max-w-2xl mx-auto mt-8">
+              <ProfileEditor />
+              <div className='flex justify-center mt-6'>
+                  <button onClick={() => setIsEditingProfile(false)} className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                      メイン画面に戻る
+                  </button>
+              </div>
+          </div>
+      );
+  }
 
-  // ▼▼▼ メイン画面のUIを変更 ▼▼▼
   return (
     <div className="p-4 max-w-2xl mx-auto text-white">
       {profile && (
         <div className="bg-gray-800 p-6 rounded-lg shadow-md mb-6 relative">
           <div className="absolute top-4 right-4 flex space-x-2">
-            <Link href={`/chats?spotifyUserId=${profile.id}`} className="...">チャット一覧</Link>
-            <button onClick={() => setIsEditingProfile(true)} className="...">プロフィール編集</button>
-            {/* 「アーティスト選択」ボタンは削除 */}
+            <Link href={`/chats?spotifyUserId=${profile.id}`} className="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 rounded text-sm">チャット一覧</Link>
+            <button onClick={() => setIsEditingProfile(true)} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-3 rounded text-sm">プロフィール編集</button>
           </div>
           <div className="flex items-center space-x-4 mb-4">
             {(profileImageUrl || profile.images?.[0]?.url) && (<Image src={profileImageUrl || profile.images?.[0]?.url || ''} alt={nickname || profile.display_name || 'プロフィール画像'} width={40} height={40} className="w-10 h-10 rounded-full object-cover" />)}
@@ -223,7 +220,6 @@ export default function Match() {
         <>
           <h2 className="text-xl font-bold mt-8 mb-4 border-b border-gray-700 pb-2">🔥 おすすめのマッチング</h2>
           <ul className="space-y-4 mb-8">
-            {/* ▼▼▼ マッチング結果の表示を全面的に更新 ▼▼▼ */}
             {matches.map((match) => {
               const isFollowing = followingInProgress.has(match.other_user_id);
               const commonArtists: string[] = JSON.parse(match.common_artists || '[]');
@@ -232,7 +228,6 @@ export default function Match() {
               return (
               <li key={match.other_user_id} className="bg-gray-700 p-4 rounded-lg shadow-md">
                 <div className="flex items-start space-x-4">
-                  {/* (プロフィール画像) */}
                   {match.profile_image_url ? (<Image src={match.profile_image_url} alt={match.nickname} width={48} height={48} className="w-12 h-12 rounded-full object-cover flex-shrink-0" />) : (<div className="w-12 h-12 rounded-full bg-gray-600 flex-shrink-0"></div>)}
                   
                   <div className="flex-grow">
@@ -242,7 +237,6 @@ export default function Match() {
                     )}
                     <p className="text-sm text-gray-300 mt-1 mb-2 line-clamp-2">{match.bio || '(自己紹介文がありません)'}</p>
                     
-                    {/* 設計書 6.4 の類似度情報 */}
                     <div className="text-sm mb-2">
                         <span className="font-bold text-white">総合一致度: {Math.round(match.combined_similarity * 100)}%</span>
                         <span className="text-xs text-gray-400 ml-2">
@@ -261,14 +255,12 @@ export default function Match() {
                     )}
                   </div>
                   
-                  {/* (フォローボタン) */}
-                  <button onClick={() => handleFollow(match.other_user_id)} disabled={isFollowing} className={`...`}>
+                  <button onClick={() => handleFollow(match.other_user_id)} disabled={isFollowing} className={`flex-shrink-0 px-4 py-2 rounded font-semibold text-sm ${isFollowing ? 'bg-gray-500 text-white cursor-wait' : 'bg-blue-500 hover:bg-blue-600 text-white'}`}>
                     {isFollowing ? '送信中...' : 'フォロー'}
                   </button>
                 </div>
               </li>
             );})}
-            {/* ▲▲▲ 表示を更新 ▲▲▲ */}
           </ul>
         </>
       )}
