@@ -2,15 +2,26 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db'; //
 import { PoolClient } from 'pg';
 import Graph from 'graphology'; //
-// @ts-ignore 
-// Step 2でインストールしたLouvain法ライブラリ
+// ▼▼▼ 修正 1: @ts-ignore を @ts-expect-error に変更 ▼▼▼
+// @ts-expect-error
+// ▲▲▲
 import { louvain } from 'graphology-communities-louvain';
+
+// ▼▼▼ 修正 3: SimilarityData インターフェースを定義 ▼▼▼
+interface SimilarityData {
+  userA: string;
+  userB: string;
+  artistSim: number;
+  genreSim: number;
+  combinedSim: number;
+  commonArtists: string;
+  commonGenres: string;
+}
+// ▲▲▲
 
 // --- 研究計画 3.1 & 3.2 ---
 /**
  * Jaccard係数を計算するヘルパー関数
- * @param setA 集合A
- * @param setB 集合B
  */
 function calculateJaccard(setA: Set<string>, setB: Set<string>): { similarity: number, intersection: Set<string> } {
   const intersection = new Set<string>([...setA].filter(x => setB.has(x)));
@@ -41,14 +52,12 @@ type UserDataMap = Map<string, {
  */
 async function getAllArtistData(client: PoolClient): Promise<UserDataMap> {
   const res = await client.query<DbUserArtist>(
-    // genresがJSONB型なので、TEXT型にキャストして取得
     'SELECT user_id, artist_id, genres::TEXT FROM user_artists'
   );
 
   const userMap: UserDataMap = new Map();
 
   for (const row of res.rows) {
-    // ユーザーがMapになければ初期化
     if (!userMap.has(row.user_id)) {
       userMap.set(row.user_id, {
         artists: new Set<string>(),
@@ -57,19 +66,17 @@ async function getAllArtistData(client: PoolClient): Promise<UserDataMap> {
     }
 
     const userData = userMap.get(row.user_id)!;
-    
-    // アーティストIDを追加
     userData.artists.add(row.artist_id);
 
-    // ジャンルを追加 (JSON文字列をパース)
     try {
       const genres: string[] = JSON.parse(row.genres || '[]');
       for (const genre of genres) {
-        // ジャンル名を正規化 (例: 'j-pop' と 'J-Pop' を統一)
         userData.genres.add(genre.toLowerCase().trim());
       }
-    } catch (e) {
-      console.warn(`Could not parse genres for user ${row.user_id}: ${row.genres}`);
+    // ▼▼▼ 修正 2: 'e' を 'e: any' にし、e.message を使用 ▼▼▼
+    } catch (e: any) { 
+      console.warn(`Could not parse genres for user ${row.user_id} (${row.genres}): ${e.message}`);
+    // ▲▲▲
     }
   }
 
@@ -83,7 +90,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ message: 'Method Not Allowed. Use GET to trigger.' });
   }
 
-  // (オプション) 将来的にVercel Cronで実行する場合、不正アクセス防止のシークレットキーを設定できます
   // if (req.query.secret !== process.env.BATCH_SECRET) {
   //   return res.status(401).json({ message: 'Invalid secret.' });
   // }
@@ -94,7 +100,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     await client.query('BEGIN');
 
-    // 1. 全ユーザーのアーティスト・ジャンルデータをDBから取得
     const userDataMap = await getAllArtistData(client);
     const userIds = Array.from(userDataMap.keys());
     console.log(`[Batch] Step 1: Loaded data for ${userIds.length} users.`);
@@ -105,8 +110,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ message: 'Calculation skipped: Need at least 2 users.' });
     }
 
-    // 2. 類似度計算 (研究計画 3)
-    const allSimilarities: any[] = [];
+    // ▼▼▼ 修正 3: 'any[]' を 'SimilarityData[]' に変更 ▼▼▼
+    const allSimilarities: SimilarityData[] = [];
+    // ▲▲▲
     for (let i = 0; i < userIds.length; i++) {
       for (let j = i + 1; j < userIds.length; j++) {
         const userA_id = userIds[i];
@@ -115,12 +121,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const dataA = userDataMap.get(userA_id)!;
         const dataB = userDataMap.get(userB_id)!;
 
-        // 3.1 アーティスト類似度
         const { similarity: artistSim, intersection: commonArtists } = calculateJaccard(dataA.artists, dataB.artists);
-        // 3.2 ジャンル類似度
         const { similarity: genreSim, intersection: commonGenres } = calculateJaccard(dataA.genres, dataB.genres);
 
-        // 3.3 総合類似度 (研究計画 3.3)
         const w1 = 0.6; // アーティスト重み
         const w2 = 0.4; // ジャンル重み
         const combinedSim = (artistSim * w1) + (genreSim * w2);
@@ -138,8 +141,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     console.log(`[Batch] Step 2: Calculated ${allSimilarities.length} similarity pairs.`);
 
-    // 3. `similarities` テーブルをクリアし、一括挿入 (研究計画 9.1)
-    await client.query('TRUNCATE TABLE similarities CASCADE'); // CASCADEで関連データをクリア
+    await client.query('TRUNCATE TABLE similarities CASCADE');
     
     if (allSimilarities.length > 0) {
       const simValues: (string | number | null)[] = [];
@@ -159,44 +161,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     console.log(`[Batch] Step 3: Saved similarities to DB.`);
 
-    // 4. グラフ構築 (研究計画 4)
     const graph = new Graph();
-    const similarityThreshold = 0.20; // 閾値 (研究計画 4.3)
+    const similarityThreshold = 0.20; 
 
-    // 4.1 ノード追加
     for (const userId of userIds) {
       graph.addNode(userId);
     }
 
-    // 4.2 エッジ追加
     for (const sim of allSimilarities) {
       if (sim.combinedSim >= similarityThreshold) {
-        // 重み付き無向エッジを追加 (研究計画 4.2)
         graph.addUndirectedEdge(sim.userA, sim.userB, { weight: sim.combinedSim });
       }
     }
     console.log(`[Batch] Step 4: Graph built (${graph.order} nodes, ${graph.size} edges).`);
 
-    // 5. コミュニティ検出 (Louvain法) (研究計画 5)
-    // resolution: 1.0 (標準), weighted: true (重み考慮)
     const communityAssignments = louvain(graph, { 
-      resolution: 1.0, // (研究計画 5.5)
-      weighted: true // (研究計画 5.4)
+      resolution: 1.0, 
+      weighted: true 
     });
 
-    // { user1_id: 0, user2_id: 0, user3_id: 1, ... } の形式のオブジェクトが返る
+    await client.query('TRUNCATE TABLE communities CASCADE'); 
 
-    // 6. `communities` テーブルをクリアし、一括挿入 (研究計画 9.1)
-    await client.query('TRUNCATE TABLE communities CASCADE'); // CASCADEで関連データをクリア
-
-    const communityEntries = Object.entries(communityAssignments); // [ [userId, communityId], ... ]
+    const communityEntries = Object.entries(communityAssignments); 
     if (communityEntries.length > 0) {
       const commValues: (string | number)[] = [];
       const commQueryRows = communityEntries.map(([userId, communityId], index) => {
         const i = index * 2;
-        // ▼▼▼ ここが修正点です ▼▼▼
         commValues.push(userId, communityId as number);
-        // ▲▲▲ ここが修正点です ▲▲▲
         return `($${i + 1}, $${i + 2})`;
       });
       const commInsertQuery = `
