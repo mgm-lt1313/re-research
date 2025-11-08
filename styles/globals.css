@@ -1,8 +1,2 @@
 /* styles/globals.css */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-/* You can add global styles below. Example:
-html, body { height: 100%; }
-*/
+@tailwind;
