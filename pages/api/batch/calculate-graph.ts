@@ -7,7 +7,6 @@ import Graph from 'graphology'; //
 // ▲▲▲
 import { louvain } from 'graphology-communities-louvain';
 
-// ▼▼▼ 修正 3: SimilarityData インターフェースを定義 ▼▼▼
 interface SimilarityData {
   userA: string;
   userB: string;
@@ -17,7 +16,6 @@ interface SimilarityData {
   commonArtists: string;
   commonGenres: string;
 }
-// ▲▲▲
 
 // --- 研究計画 3.1 & 3.2 ---
 /**
@@ -73,10 +71,11 @@ async function getAllArtistData(client: PoolClient): Promise<UserDataMap> {
       for (const genre of genres) {
         userData.genres.add(genre.toLowerCase().trim());
       }
-    // ▼▼▼ 修正 2: 'e' を '_e' (アンダースコア) に変更し、未使用であることを明示 ▼▼▼
-    } catch (_e: any) { 
-      // ▲▲▲
-      console.warn(`Could not parse genres for user ${row.user_id} (${row.genres})`);
+    // ▼▼▼ 修正 2: catch (e: unknown) に変更し、e を使用する ▼▼▼
+    } catch (e: unknown) { 
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      console.warn(`Could not parse genres for user ${row.user_id} (${row.genres}): ${errorMessage}`);
+    // ▲▲▲
     }
   }
 
@@ -110,9 +109,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ message: 'Calculation skipped: Need at least 2 users.' });
     }
 
-    // ▼▼▼ 修正 3: 'any[]' を 'SimilarityData[]' に変更 ▼▼▼
     const allSimilarities: SimilarityData[] = [];
-    // ▲▲▲
     for (let i = 0; i < userIds.length; i++) {
       for (let j = i + 1; j < userIds.length; j++) {
         const userA_id = userIds[i];
