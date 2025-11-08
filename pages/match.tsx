@@ -233,8 +233,35 @@ export default function Match() {
         bio,
         accessToken: access_token, 
       }); 
+      
       alert(isNewUser ? 'プロフィールを登録しました！' : 'プロフィールを更新しました！');
-      setIsNewUser(false); setIsEditingProfile(false);
+      
+      const wasNewUser = isNewUser; // 👈 新規ユーザーだったか記憶
+      setIsNewUser(false); 
+      setIsEditingProfile(false);
+
+      // --- ▼▼▼ 修正箇所 ▼▼▼ ---
+      // プロフィール保存が成功した後、おすすめユーザーを取得する
+      console.log('Fetching recommendations after profile save...');
+      try {
+        const matchRes = await axios.post('/api/match/get-recommendations', { 
+            spotifyUserId: profile.id 
+        });
+        setMatches(matchRes.data.matches);
+        console.log(`Fetched ${matchRes.data.matches.length} matches.`);
+
+        // 新規ユーザー登録直後は、バックグラウンド処理（calculate-graph）が
+        // 完了していない可能性が高いため、0件の場合があることを通知する
+        if (wasNewUser && matchRes.data.matches.length === 0) {
+            alert('おすすめユーザーのマッチング計算を開始しました。計算が完了するまで、しばらくお待ちください。\n（数分後にページを再読み込みしてください）');
+        }
+
+      } catch (matchError) {
+         console.error('Failed to fetch recommendations after save:', matchError);
+         setError('プロフィールの保存には成功しましたが、おすすめユーザーの取得に失敗しました。');
+      }
+      // --- ▲▲▲ 修正ここまで ▲▲▲ ---
+
     } catch (e: unknown) {
       if (axios.isAxiosError(e)) {
             setError(`プロフィールの保存中にエラーが発生しました: ${e.response?.status || '不明'}`);
@@ -246,7 +273,9 @@ export default function Match() {
              setError('予期せぬ不明なエラーが発生しました。');
              console.error('プロフィール保存で不明なエラー:', e);
         }
-    } finally { setLoading(false); }
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   
