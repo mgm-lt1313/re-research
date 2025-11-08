@@ -1,10 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import pool from '../../../lib/db'; //
+import pool from '../../../lib/db';
 import { PoolClient } from 'pg';
-import Graph from 'graphology'; //
-// ▼▼▼ 修正 1: @ts-expect-error に理由（3文字以上）を追加 ▼▼▼
+import Graph from 'graphology';
 // @ts-expect-error: graphology-communities-louvain lacks official TS types
-// ▲▲▲
 import { louvain } from 'graphology-communities-louvain';
 
 interface SimilarityData {
@@ -71,7 +69,7 @@ async function getAllArtistData(client: PoolClient): Promise<UserDataMap> {
       for (const genre of genres) {
         userData.genres.add(genre.toLowerCase().trim());
       }
-    // ▼▼▼ 修正 2: catch (e: unknown) に変更し、e を使用する ▼▼▼
+    // ▼▼▼ ここが修正点です ▼▼▼
     } catch (e: unknown) { 
       const errorMessage = e instanceof Error ? e.message : String(e);
       console.warn(`Could not parse genres for user ${row.user_id} (${row.genres}): ${errorMessage}`);
