@@ -1,23 +1,27 @@
 // pages/api/follow/list.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
-// PoolClient は不要になったため削除
+// ▼▼▼ 修正: 'PoolClient' のインポートを削除 ▼▼▼
+// import { PoolClient } from 'pg';
 
+// (pool.query を直接使う)
 async function getUserIdBySpotifyId(spotifyUserId: string): Promise<string | null> {
-    // pool.query を直接使用
     const res = await pool.query('SELECT id FROM users WHERE spotify_user_id = $1', [spotifyUserId]);
     return res.rows.length > 0 ? res.rows[0].id : null;
 }
 
+// --- 🔽 型定義を追加 ---
+// マッチ済みユーザー情報の型 (フロントエンド chats.tsx と合わせる)
 interface MatchProfile {
-    id: string;
+    id: string; // users.id (uuid)
     nickname: string;
     profile_image_url: string | null;
 }
 interface ApprovedMatchResult {
-  match_id: number;
-  other_user: MatchProfile | undefined;
+  match_id: number; // follows.id (bigint) - チャットルームID
+  other_user: MatchProfile | undefined; // 相手のプロフィール (Mapに存在しない場合 undefined)
 }
+// --- 🔼 型定義を追加 ---
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'GET') return res.status(405).end();
@@ -28,11 +32,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-        // ▼▼▼ 修正: pool.connect() / client.release() を削除 ▼▼▼
+        // ▼▼▼ 修正: pool.connect() を使わない ▼▼▼
         const selfId = await getUserIdBySpotifyId(spotifyUserId);
         if (!selfId) return res.status(404).json({ message: 'User not found.' });
 
-        // 1. 自分宛の承認待ちリクエスト
+        // 1. 自分宛の承認待ちリクエスト (変更なし)
         const pendingRequests = await pool.query(
             `SELECT
                 f.id as follow_id, u.id as user_id, u.nickname, u.profile_image_url
@@ -42,7 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             [selfId]
         );
 
-        // 2. 成立済みのマッチング
+        // 2. 成立済みのマッチング (変更なし)
         const approvedMatches = await pool.query(
             `SELECT
                 f.id as match_id,
@@ -72,13 +76,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
             matchesWithProfiles = approvedMatches.rows.map(match => ({
                 match_id: match.match_id,
-                other_user: userProfileMap.get(match.other_user_id)
+                other_user: userProfileMap.get(match.other_user_id) // getは undefined を返す可能性がある
             }));
         }
 
         res.status(200).json({
             pendingRequests: pendingRequests.rows,
-            approvedMatches: matchesWithProfiles
+            approvedMatches: matchesWithProfiles // 型付けされた配列を返す
         });
         // ▲▲▲ 修正ここまで ▲▲▲
 

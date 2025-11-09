@@ -1,16 +1,17 @@
 // pages/api/chat/[match_id].ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
-// PoolClient は不要になったため削除
+// ▼▼▼ 修正: 'PoolClient' のインポートを削除 ▼▼▼
+// import { PoolClient } from 'pg';
 
+// ユーザーID (uuid) を取得するヘルパー関数 (pool.query を直接使う)
 async function getUserIdBySpotifyId(spotifyUserId: string): Promise<string | null> {
-    // pool.query を直接使用
     const res = await pool.query('SELECT id FROM users WHERE spotify_user_id = $1', [spotifyUserId]);
     return res.rows.length > 0 ? res.rows[0].id : null;
 }
 
+// 認証チェック (pool.query を直接使う)
 async function verifyUserMatchAccess(userId: string, matchId: number): Promise<boolean> {
-     // pool.query を直接使用
      const res = await pool.query(
          `SELECT 1 FROM follows
           WHERE id = $1 AND (follower_id = $2 OR following_id = $2) AND status = 'approved'`,
@@ -41,7 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-        // ▼▼▼ 修正: pool.connect() / client.release() を削除 ▼▼▼
+        // ▼▼▼ 修正: pool.connect() を使わない ▼▼▼
         const selfId = await getUserIdBySpotifyId(selfSpotifyId);
         console.log(`  Internal selfId (uuid):`, selfId);
         if (!selfId) {
