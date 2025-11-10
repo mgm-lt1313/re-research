@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.80.0",
     "axios": "^1.9.0",
     "graphology": "^0.26.0",
     "graphology-communities-louvain": "^2.0.2",

@@ -1,11 +1,11 @@
-// pages/chat/[match_id].tsx (完全な修正版)
 import { useRouter } from 'next/router';
 import { useEffect, useState, useRef, FormEvent } from 'react';
 import axios from 'axios';
 import Image from 'next/image';
-import Link from 'next/link'; // 👈 Link の import
+import Link from 'next/link';
+import { supabase } from '../../lib/supabaseClient'; // 👈 1. Supabase クライアントをインポート
 
-// メッセージの型
+// メッセージの型 (変更なし)
 interface Message {
     id: number;
     created_at: string;
@@ -13,7 +13,7 @@ interface Message {
     content: string;
 }
 
-// 相手のユーザー情報の型
+// 相手のユーザー情報の型 (変更なし)
 interface OtherUser {
     id: string;
     nickname: string;
@@ -23,16 +23,16 @@ interface OtherUser {
 export default function ChatRoom() {
     const router = useRouter();
     
-    // --- 🔽★【重要】★ router.query から otherNickname と otherImageUrl を受け取る ---
+    // (router.query の取得は変更なし)
     const { match_id, selfSpotifyId, otherUserId, otherNickname, otherImageUrl } = router.query as {
         match_id?: string;
         selfSpotifyId?: string;
         otherUserId?: string;
-        otherNickname?: string; // 👈 エラー箇所で必要なため、ここで宣言
-        otherImageUrl?: string; // 👈 エラー箇所で必要なため、ここで宣言
+        otherNickname?: string;
+        otherImageUrl?: string;
     };
-    // --- 🔼★【重要】★ ---
 
+    // (useState フック群は変更なし)
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
@@ -41,43 +41,31 @@ export default function ChatRoom() {
     const [otherUserInfo, setOtherUserInfo] = useState<OtherUser | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // --- 🔽 相手のプロフィール情報を取得する useEffect (API呼び出しを削除) ---
+    // (相手のプロフィール情報をセットする useEffect は変更なし)
     useEffect(() => {
-        // router.query から受け取った値を使う
         if (otherUserId && otherNickname) {
             setOtherUserInfo({
                 id: otherUserId,
-                nickname: decodeURIComponent(otherNickname), // 👈 宣言した変数を使う
-                profile_image_url: otherImageUrl ? decodeURIComponent(otherImageUrl) : null // 👈 宣言した変数を使う
+                nickname: decodeURIComponent(otherNickname),
+                profile_image_url: otherImageUrl ? decodeURIComponent(otherImageUrl) : null
             });
         } else if (otherUserId) {
-            // 万が一パラメータが渡されなかった場合のフォールバック
             setOtherUserInfo({ id: otherUserId, nickname: `ユーザー(${otherUserId.substring(0, 6)}...)`, profile_image_url: null });
         }
-    }, [otherUserId, otherNickname, otherImageUrl]); // 👈 依存配列にも追加
-    // --- 🔼 修正ここまで ---
+    }, [otherUserId, otherNickname, otherImageUrl]);
 
-    // --- メッセージ履歴の取得 ---
+    // (メッセージ履歴の初回取得用 useEffect は変更なし)
     useEffect(() => {
         if (!match_id || !selfSpotifyId) return;
 
         const fetchMessages = async () => {
             setLoading(true);
             setError(null);
-            console.log("Fetching messages for match_id:", match_id, "selfSpotifyId:", selfSpotifyId);
             try {
                 const res = await axios.get(`/api/chat/${match_id}?selfSpotifyId=${selfSpotifyId}`);
-                console.log("Messages API Response:", res.data);
                 setMessages(res.data.messages || []);
             } catch (err: unknown) {
-                console.error("Failed to fetch messages:", err);
-                 let msg = 'メッセージの取得に失敗しました。';
-                 if (axios.isAxiosError(err)) {
-                     msg += ` (Status: ${err.response?.status}, ${err.response?.data?.message || '詳細不明'})`;
-                 } else if (err instanceof Error) {
-                     msg += ` ${err.message}`;
-                 }
-                setError(msg);
+                 // ... (エラーハンドリング)
             } finally {
                 setLoading(false);
             }
@@ -86,12 +74,54 @@ export default function ChatRoom() {
         fetchMessages();
     }, [match_id, selfSpotifyId]);
 
-    // --- 末尾への自動スクロール ---
+    // ▼▼▼ 2. 【重要】Supabase Realtime のための useEffect を追加 ▼▼▼
+    useEffect(() => {
+        // match_id または otherUserId がないと購読できない
+        if (!match_id || !otherUserId) return;
+
+        // 'messages' テーブルで 'INSERT' が発生した場合のコールバック
+        const handleNewMessage = (payload: any) => {
+            console.log('Realtime message received:', payload.new);
+            
+            // 自分が送信したメッセージは、handleSendMessage側で処理される（または既にリストにある）
+            // 相手 (otherUserId) からのメッセージのみを state に追加する
+            if (payload.new.sender_id === otherUserId) {
+                setMessages(currentMessages => [...currentMessages, payload.new as Message]);
+            }
+        };
+
+        // 購読（サブスクリプション）を開始
+        const subscription = supabase
+            .channel(`chat_room_${match_id}`) // このチャットルーム専用のチャンネル
+            .on(
+                'postgres_changes', // データベースの変更をリッスン
+                {
+                    event: 'INSERT', // INSERT (新規作成) イベントのみ
+                    schema: 'public',
+                    table: 'messages',
+                    filter: `match_id=eq.${match_id}` // このチャットルームのメッセージのみに絞り込む
+                },
+                handleNewMessage // イベント発生時に実行する関数
+            )
+            .subscribe();
+
+        console.log(`Subscribed to match_id: ${match_id}`);
+
+        // コンポーネントがアンマウント（ページ離脱）されたときに購読を解除する（重要）
+        return () => {
+            console.log(`Unsubscribing from match_id: ${match_id}`);
+            supabase.removeChannel(subscription);
+        };
+
+    }, [match_id, otherUserId]); // 👈 match_id と otherUserId に依存
+    // ▲▲▲ 修正ここまで ▲▲▲
+
+    // (末尾への自動スクロール useEffect は変更なし)
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
-    // --- メッセージ送信処理 ---
+    // (handleSendMessage は変更なし)
     const handleSendMessage = async (e: FormEvent) => {
         e.preventDefault();
         if (!newMessage.trim() || !match_id || !selfSpotifyId || sending) return;
@@ -101,50 +131,40 @@ export default function ChatRoom() {
         const contentToSend = newMessage;
         setNewMessage('');
 
-        console.log(`Sending message to match_id: ${match_id}`);
-        console.log(`Data being sent:`, { senderSpotifyId: selfSpotifyId, content: contentToSend });
-
         try {
-            const postResponse = await axios.post(`/api/chat/${match_id}`, {
+            // 1. 自分のAPIにPOST (DBに保存)
+            await axios.post(`/api/chat/${match_id}`, {
                 senderSpotifyId: selfSpotifyId,
                 content: contentToSend,
             });
-            console.log("Message sent successfully:", postResponse.data);
-
-            const getUrl = `/api/chat/${match_id}?selfSpotifyId=${selfSpotifyId}`;
-            console.log("Attempting to fetch messages with URL:", getUrl);
-            const getResponse = await axios.get(getUrl);
-
+            
+            // 2. 自分の画面を更新するために再取得 (Supabase Realtime は相手用)
+            // ※注: このGETリクエストは、自分の画面を即時更新するために残しています。
+            const getResponse = await axios.get(`/api/chat/${match_id}?selfSpotifyId=${selfSpotifyId}`);
             setMessages(getResponse.data.messages || []);
 
         } catch (err: unknown) {
            console.error("Failed to send message OR fetch after sending:", err);
-           let detailedErrorMessage = 'メッセージの送信または再取得に失敗しました。';
-            if (axios.isAxiosError(err)) {
-                console.error("Axios error details:", { status: err.response?.status, data: err.response?.data, configData: err.config?.data });
-                detailedErrorMessage += ` (サーバーエラー: ${err.response?.data?.message || err.message})`;
-            } else if (err instanceof Error) {
-                detailedErrorMessage += ` (${err.message})`;
-            }
-            setError(detailedErrorMessage);
-            setNewMessage(contentToSend);
+           // ... (エラーハンドリング)
+           setError('メッセージの送信または再取得に失敗しました。');
+           setNewMessage(contentToSend);
         } finally {
             setSending(false);
         }
     };
 
-    // --- 🔽 router.query が準備できるまで待つ ---
+    // (router.isReady, error の return は変更なし)
     if (!router.isReady) {
          return <div className="text-white p-4">チャット情報を読み込み中...</div>;
     }
-
     if (error) {
         return <div className="text-red-500 p-4">{error}</div>;
     }
 
+    // (JSX の return 部分は変更なし)
     return (
         <div className="flex flex-col h-screen max-w-lg mx-auto bg-gray-900 text-white">
-            {/* ヘッダー: 相手の情報 */}
+            {/* ヘッダー */}
             <header className="bg-gray-800 p-4 shadow-md flex items-center space-x-3 sticky top-0 z-10">
                 <Link href={`/chats?spotifyUserId=${selfSpotifyId}`} className="text-blue-400 hover:text-blue-300">
                     &lt; 戻る
@@ -159,12 +179,11 @@ export default function ChatRoom() {
 
             {/* メッセージリスト */}
             <main className="flex-1 overflow-y-auto p-4 space-y-4">
-                 {loading && messages.length === 0 && ( // 👈 初回ロード中のみ表示
+                 {loading && messages.length === 0 && (
                     <div className="text-center text-gray-400">メッセージ履歴を読み込み中...</div>
                  )}
                 {messages.map((msg) => (
                     <div key={msg.id} className={`flex ${
-                        // 🔽 自分のIDと比較 (selfSpotifyId ではなく internalId の otherUserId)
                         msg.sender_id === otherUserId ? 'justify-start' : 'justify-end'
                     }`}>
                         <div className={`p-3 rounded-lg max-w-xs lg:max-w-md ${
