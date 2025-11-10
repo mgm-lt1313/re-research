@@ -129,122 +129,70 @@ export default function Match() {
       )}
 
       {/* ▼▼▼ おすすめマッチングの表示ロジック ▼▼▼ */}
+      {/* ▼▼▼【修正】0件の場合の表示ロジックを追加 ▼▼▼ */}
       <div>
         <h2 className="text-xl font-bold mt-8 mb-4 border-b border-gray-700 pb-2">🔥 おすすめのマッチング</h2>
         
-        {/* ▼ 0件の場合のメッセージを追加 */}
+        {/* 0件かつローディング終了時にメッセージ表示 */}
         {matches.length === 0 && !loading && (
           <div className="bg-gray-800 p-6 rounded-lg text-center text-gray-400">
             <p className="text-lg font-semibold mb-2">まだおすすめのユーザーがいません</p>
             <p className="text-sm">
               新しいユーザーが登録されると、マッチング計算が自動的に実行されます。
-              (テスト中は、2人目のユーザーを登録してみてください)
             </p>
           </div>
         )}
 
-        <ul className="space-y-4 mb-8">
-          {matches.map((match) => {
-            const isFollowing = followingInProgress.has(match.other_user_id);
-            const commonArtists: string[] = JSON.parse(match.common_artists || '[]');
-            const commonGenres: string[] = JSON.parse(match.common_genres || '[]');
+        {/* 1件以上ある場合のみリストを表示 */}
+        {matches.length > 0 && (
+          <ul className="space-y-4 mb-8">
+            {matches.map((match) => {
+              // ... (中略: isFollowing, commonArtists, commonGenres) ...
+              // ... (中略: <li> の中身) ...
+              const isFollowing = followingInProgress.has(match.other_user_id);
+              const commonArtists: string[] = JSON.parse(match.common_artists || '[]');
+              const commonGenres: string[] = JSON.parse(match.common_genres || '[]');
 
-            // ▼▼▼ フォローボタンの状態を動的に決定 ▼▼▼
-            let followButton: React.ReactNode;
-            if (isFollowing) {
-              followButton = (
-                <button disabled className="flex-shrink-0 px-4 py-2 rounded font-semibold text-sm bg-gray-500 text-white cursor-wait">
-                  処理中...
-                </button>
-              );
-            } else if (match.follow_status === 'approved') {
-              followButton = (
-                <Link href={`/chats?spotifyUserId=${profile?.id}`} className="flex-shrink-0 px-4 py-2 rounded font-semibold text-sm bg-green-600 hover:bg-green-700 text-white text-center">
-                  チャット
-                </Link>
-              );
-            } else if (match.follow_status === 'pending') {
-              if (match.i_am_follower) {
-                // 自分がリクエスト済み
-                followButton = (
-                  <button disabled className="flex-shrink-0 px-4 py-2 rounded font-semibold text-sm bg-gray-500 text-white">
-                    リクエスト済み
-                  </button>
-                );
-              } else {
-                // 相手からリクエストが来ている（承認待ち）
-                followButton = (
-                  <Link href={`/chats?spotifyUserId=${profile?.id}`} className="flex-shrink-0 px-4 py-2 rounded font-semibold text-sm bg-yellow-500 hover:bg-yellow-600 text-black text-center">
-                    承認待ち
-                  </Link>
-                );
-              }
-            } else {
-              // 未フォロー
-              followButton = (
-                <button onClick={() => handleFollowRequest(match.other_user_id, match.nickname)} className="flex-shrink-0 px-4 py-2 rounded font-semibold text-sm bg-blue-500 hover:bg-blue-600 text-white">
-                  フォロー
-                </button>
-              );
-            }
-            // ▲▲▲ ボタンロジックここまで ▲▲▲
-
-            return (
-            <li key={match.other_user_id} className="bg-gray-700 p-4 rounded-lg shadow-md">
-              <div className="flex items-start space-x-4">
-                {match.profile_image_url ? (<Image src={match.profile_image_url} alt={match.nickname} width={48} height={48} className="w-12 h-12 rounded-full object-cover flex-shrink-0" />) : (<div className="w-12 h-12 rounded-full bg-gray-600 flex-shrink-0"></div>)}
-                
-                <div className="flex-grow min-w-0"> {/* 👈 min-w-0 を追加 */}
-                  <h3 className="text-lg font-bold truncate">{match.nickname}</h3>
-                  {match.is_same_community && (
-                      <span className="text-xs font-bold text-cyan-300">★同じ音楽コミュニティ</span>
-                  )}
-                  <p className="text-sm text-gray-300 mt-1 mb-2 line-clamp-2">{match.bio || '(自己紹介文がありません)'}</p>
+              return (
+              <li key={match.other_user_id} className="bg-gray-700 p-4 rounded-lg shadow-md">
+                <div className="flex items-start space-x-4">
+                  {match.profile_image_url ? (<Image src={match.profile_image_url} alt={match.nickname} width={48} height={48} className="w-12 h-12 rounded-full object-cover flex-shrink-0" />) : (<div className="w-12 h-12 rounded-full bg-gray-600 flex-shrink-0"></div>)}
                   
-                  <div className="text-sm mb-3">
-                      <span className="font-bold text-white">総合一致度: {Math.round(match.combined_similarity * 100)}%</span>
-                      <span className="text-xs text-gray-400 ml-2">
-                          (アーティスト: {Math.round(match.artist_similarity * 100)}%, ジャンル: {Math.round(match.genre_similarity * 100)}%)
-                      </span>
+                  <div className="flex-grow">
+                    <h3 className="text-lg font-bold">{match.nickname}</h3>
+                    {match.is_same_community && (
+                        <span className="text-xs font-bold text-cyan-300">★同じ音楽コミュニティ</span>
+                    )}
+                    <p className="text-sm text-gray-300 mt-1 mb-2 line-clamp-2">{match.bio || '(自己紹介文がありません)'}</p>
+                    
+                    <div className="text-sm mb-2">
+                        <span className="font-bold text-white">総合一致度: {Math.round(match.combined_similarity * 100)}%</span>
+                        <span className="text-xs text-gray-400 ml-2">
+                            (アーティスト: {Math.round(match.artist_similarity * 100)}%, ジャンル: {Math.round(match.genre_similarity * 100)}%)
+                        </span>
+                    </div>
+                    {commonArtists.length > 0 && (
+                        <div className="text-xs text-gray-300">
+                           <span className="font-semibold">共通アーティスト:</span> {commonArtists.slice(0, 3).join(', ')} {commonArtists.length > 3 ? '...' : ''}
+                        </div>
+                    )}
+                    {commonGenres.length > 0 && (
+                         <div className="text-xs text-gray-300">
+                           <span className="font-semibold">共通ジャンル:</span> {commonGenres.slice(0, 2).join(', ')} {commonGenres.length > 2 ? '...' : ''}
+                        </div>
+                    )}
                   </div>
-
-                  {/* ▼▼▼ 共通項目のUI改善 (タグ風) ▼▼▼ */}
-                  {commonArtists.length > 0 && (
-                      <div className="mb-2">
-                         <span className="font-semibold text-xs text-gray-300 mr-2">共通アーティスト:</span>
-                         <div className="flex flex-wrap gap-1 mt-1">
-                          {commonArtists.slice(0, 3).map(artist => (
-                              <span key={artist} className="text-xs bg-pink-600 text-white px-2 py-0.5 rounded-full">{artist}</span>
-                          ))}
-                          {commonArtists.length > 3 && <span className="text-xs text-gray-400 self-end">...</span>}
-                         </div>
-                      </div>
-                  )}
-                  {commonGenres.length > 0 && (
-                       <div>
-                         <span className="font-semibold text-xs text-gray-300 mr-2">共通ジャンル:</span>
-                         <div className="flex flex-wrap gap-1 mt-1">
-                          {commonGenres.slice(0, 3).map(genre => (
-                              <span key={genre} className="text-xs bg-indigo-600 text-white px-2 py-0.5 rounded-full">{genre}</span>
-                          ))}
-                          {commonGenres.length > 3 && <span className="text-xs text-gray-400 self-end">...</span>}
-                         </div>
-                      </div>
-                  )}
-                  {/* ▲▲▲ UI改善ここまで ▲▲▲ */}
+                  
+                  <button onClick={() => handleFollow(match.other_user_id)} disabled={isFollowing} className={`flex-shrink-0 px-4 py-2 rounded font-semibold text-sm ${isFollowing ? 'bg-gray-500 text-white cursor-wait' : 'bg-blue-500 hover:bg-blue-600 text-white'}`}>
+                    {isFollowing ? '送信中...' : 'フォロー'}
+                  </button>
                 </div>
-                
-                {/* ▼▼▼ 動的に生成したボタンを配置 ▼▼▼ */}
-                <div className="w-28 text-right flex-shrink-0"> {/* 👈 w-24 から w-28 に変更 */}
-                  {followButton}
-                </div>
-              </div>
-            </li>
-          );})}
-        </ul>
+              </li>
+            );})}
+          </ul>
+        )}
       </div>
-      {/* ▲▲▲ おすすめマッチングの表示ロジックここまで ▲▲▲ */}
-
+      {/* ▲▲▲ 修正ここまで ▲▲▲ */}
     </div>
   );
 }
