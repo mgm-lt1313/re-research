@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# ▼ 論文用のグラフデータをGit管理下から除外する
+graph.json
