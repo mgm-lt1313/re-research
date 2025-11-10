@@ -163,7 +163,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log(`[Batch] Step 3: Saved similarities to DB.`);
 
     const graph = new Graph();
-    const similarityThreshold = 0.20; 
+    const similarityThreshold = 0.15; // エッジを追加するための閾値
 
     for (const userId of userIds) {
       graph.addNode(userId);
