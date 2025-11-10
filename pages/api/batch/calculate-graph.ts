@@ -119,9 +119,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const w2 = 0.4; // ジャンル重み
         const combinedSim = (artistSim * w1) + (genreSim * w2);
 
+        // ▼▼▼【user_a_b_check エラー修正】▼▼▼
+        // IDを文字列としてソートし、DB制約 (user_a_id < user_b_id) を満たす
+        const [id1, id2] = [userA_id, userB_id].sort();
+        // ▲▲▲ 修正ここまで ▲▲▲
+
         allSimilarities.push({
-          userA: userA_id,
-          userB: userB_id,
+          userA: id1, // 👈 修正
+          userB: id2, // 👈 修正
           artistSim,
           genreSim,
           combinedSim,
@@ -143,8 +148,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         simValues.push(
           sim.userA, sim.userB, sim.artistSim, sim.genreSim, 
           sim.combinedSim, 
-          JSON.stringify(sim.commonArtists), // 👈 JSON文字列に変換
-          JSON.stringify(sim.commonGenres)   // 👈 JSON文字列に変換
+          JSON.stringify(sim.commonArtists), // 👈 ★ JSONエラー修正
+          JSON.stringify(sim.commonGenres)   // 👈 ★ JSONエラー修正
         );
         return `($${i + 1}, $${i + 2}, $${i + 3}, $${i + 4}, $${i + 5}, $${i + 6}, $${i + 7})`;
       });
