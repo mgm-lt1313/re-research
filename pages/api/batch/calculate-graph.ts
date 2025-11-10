@@ -2,8 +2,8 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db'; //
 import { PoolClient } from 'pg'; // 👈 修正: '@vercel/postgres' から 'pg' に変更
 import Graph from 'graphology'; //
-// @ts-expect-error: graphology-communities-louvain lacks official TS types
-import { louvain } from 'graphology-communities-louvain';
+
+import louvain from 'graphology-communities-louvain';
 
 interface SimilarityData {
   userA: string;
@@ -168,7 +168,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const communityAssignments = louvain(graph, { 
       resolution: 1.0, 
-      weighted: true 
+      // weighted: true 
     });
 
     await client.query('TRUNCATE TABLE communities CASCADE'); 
