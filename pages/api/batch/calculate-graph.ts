@@ -166,39 +166,55 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     console.log(`[Batch] Step 4: Graph built (${graph.order} nodes, ${graph.size} edges).`);
 
-    const communityAssignments = louvain(graph, { 
-      resolution: 1.0, 
-      // weighted: true 
-    });
+    // ▼▼▼【修正】変数をifブロックの外側で宣言 ▼▼▼
+    let communityAssignments: { [key: string]: number } = {};
+    let communityCount = 0;
+    // ▲▲▲ 修正ここまで ▲▲▲
 
-    await client.query('TRUNCATE TABLE communities CASCADE'); 
-
-    // ... (中略: コミュニティ保存ロジック commInsertQuery まで) ...
-    const communityEntries = Object.entries(communityAssignments); 
-    if (communityEntries.length > 0) {
-      const commValues: (string | number)[] = [];
-      const commQueryRows = communityEntries.map(([userId, communityId], index) => {
-        const i = index * 2;
-        commValues.push(userId, communityId as number);
-        return `($${i + 1}, $${i + 2})`;
+    // ▼▼▼【変更後】グラフにエッジがある場合のみLouvainを実行 ▼▼▼
+    if (graph.size > 0) {
+      // ▼▼▼【修正】ここで代入する ▼▼▼
+      communityAssignments = louvain(graph, { 
+        resolution: 1.0
       });
-      const commInsertQuery = `
-        INSERT INTO communities (user_id, community_id)
-        VALUES ${commQueryRows.join(', ')}
-      `;
-      await client.query(commInsertQuery, commValues);
+
+      await client.query('TRUNCATE TABLE communities CASCADE'); 
+
+      const communityEntries = Object.entries(communityAssignments); 
+      if (communityEntries.length > 0) {
+        const commValues: (string | number)[] = [];
+        const commQueryRows = communityEntries.map(([userId, communityId], index) => {
+          const i = index * 2;
+          commValues.push(userId, communityId as number);
+          return `($${i + 1}, $${i + 2})`;
+        });
+        const commInsertQuery = `
+          INSERT INTO communities (user_id, community_id)
+          VALUES ${commQueryRows.join(', ')}
+        `;
+        await client.query(commInsertQuery, commValues);
+      }
+      
+      // ▼▼▼【修正】コミュニティ数をここで計算 ▼▼▼
+      communityCount = new Set(Object.values(communityAssignments)).size;
+      console.log(`[Batch] Step 5 & 6: Communities detected (${communityCount}) and saved to DB.`);
+    
+    } else {
+      console.log(`[Batch] Step 5 & 6: Skipped community detection (no edges in graph).`);
+      await client.query('TRUNCATE TABLE communities CASCADE'); 
     }
-    console.log(`[Batch] Step 5 & 6: Communities detected and saved to DB.`);
+    // ▲▲▲ ifブロック修正ここまで ▲▲▲
 
     await client.query('COMMIT');
     console.log('[Batch] === Success: All calculations committed. ===');
-    // ... (中略: res.status(200) ... ) ...
+    
+    // ▼▼▼【修正】外で宣言した変数を使う ▼▼▼
     res.status(200).json({ 
       message: 'Batch calculation successful.',
       users: userIds.length,
       pairs: allSimilarities.length,
       edges: graph.size,
-      communities: new Set(Object.values(communityAssignments)).size
+      communities: communityCount // 修正した communityCount を使う
     });
 
   } catch (error: unknown) {
