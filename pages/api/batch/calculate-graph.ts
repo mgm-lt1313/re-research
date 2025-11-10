@@ -1,10 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db'; //
-import { VercelPoolClient } from '@vercel/postgres'; // 👈 修正: 'pg' から '@vercel/postgres' に変更
+import { PoolClient } from 'pg'; // 👈 修正: '@vercel/postgres' から 'pg' に変更
 import Graph from 'graphology'; //
-// ▼▼▼ 修正 1: @ts-expect-error に理由（3文字以上）を追加 ▼▼▼
 // @ts-expect-error: graphology-communities-louvain lacks official TS types
-// ▲▲▲
 import { louvain } from 'graphology-communities-louvain';
 
 interface SimilarityData {
@@ -17,10 +15,8 @@ interface SimilarityData {
   commonGenres: string;
 }
 
-// --- 研究計画 3.1 & 3.2 ---
-/**
- * Jaccard係数を計算するヘルパー関数
- */
+// ... (中略: calculateJaccard, DbUserArtist, UserDataMap) ...
+
 function calculateJaccard(setA: Set<string>, setB: Set<string>): { similarity: number, intersection: Set<string> } {
   const intersection = new Set<string>([...setA].filter(x => setB.has(x)));
   const union = new Set<string>([...setA, ...setB]);
@@ -32,14 +28,12 @@ function calculateJaccard(setA: Set<string>, setB: Set<string>): { similarity: n
   return { similarity: intersection.size / union.size, intersection };
 }
 
-// DBから取得するアーティストデータの型
 interface DbUserArtist {
   user_id: string; // uuid
   artist_id: string;
   genres: string; // DBからはJSON文字列として取得
 }
 
-// 計算用に整形するデータ型
 type UserDataMap = Map<string, {
   artists: Set<string>;
   genres: Set<string>;
@@ -48,7 +42,7 @@ type UserDataMap = Map<string, {
 /**
  * DBから全ユーザーのアーティストとジャンルのセットを取得
  */
-async function getAllArtistData(client: VercelPoolClient): Promise<UserDataMap> { // 👈 修正: PoolClient を VercelPoolClient に変更
+async function getAllArtistData(client: PoolClient): Promise<UserDataMap> { // 👈 修正: VercelPoolClient を PoolClient に変更
   const res = await client.query<DbUserArtist>(
     'SELECT user_id, artist_id, genres::TEXT FROM user_artists'
   );
@@ -71,11 +65,9 @@ async function getAllArtistData(client: VercelPoolClient): Promise<UserDataMap> 
       for (const genre of genres) {
         userData.genres.add(genre.toLowerCase().trim());
       }
-    // ▼▼▼ 修正 2: catch (e: unknown) に変更し、e を使用する ▼▼▼
     } catch (e: unknown) { 
       const errorMessage = e instanceof Error ? e.message : String(e);
       console.warn(`Could not parse genres for user ${row.user_id} (${row.genres}): ${errorMessage}`);
-    // ▲▲▲
     }
   }
 
@@ -109,6 +101,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ message: 'Calculation skipped: Need at least 2 users.' });
     }
 
+    // ... (中略: 類似度計算ロジック allSimilarities.push まで) ...
     const allSimilarities: SimilarityData[] = [];
     for (let i = 0; i < userIds.length; i++) {
       for (let j = i + 1; j < userIds.length; j++) {
@@ -140,6 +133,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     await client.query('TRUNCATE TABLE similarities CASCADE');
     
+    // ... (中略: 類似度保存ロジック simInsertQuery まで) ...
     if (allSimilarities.length > 0) {
       const simValues: (string | number | null)[] = [];
       const simQueryRows = allSimilarities.map((sim, index) => {
@@ -179,6 +173,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     await client.query('TRUNCATE TABLE communities CASCADE'); 
 
+    // ... (中略: コミュニティ保存ロジック commInsertQuery まで) ...
     const communityEntries = Object.entries(communityAssignments); 
     if (communityEntries.length > 0) {
       const commValues: (string | number)[] = [];
@@ -197,6 +192,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     await client.query('COMMIT');
     console.log('[Batch] === Success: All calculations committed. ===');
+    // ... (中略: res.status(200) ... ) ...
     res.status(200).json({ 
       message: 'Batch calculation successful.',
       users: userIds.length,

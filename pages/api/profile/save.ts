@@ -1,14 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db'; //
 import { getMyFollowingArtists, SpotifyArtist } from '../../../lib/spotify'; //
-import { VercelPoolClient } from '@vercel/postgres'; // 👈 修正: 'pg' から '@vercel/postgres' に変更
+import { PoolClient } from 'pg'; // 👈 修正: '@vercel/postgres' から 'pg' に変更
 
 /**
  * ユーザーの全フォローアーティストをDBに保存（または更新）する
  * (研究計画 2.1)
  */
 async function saveAllFollowingArtists(
-  client: VercelPoolClient, // 👈 修正: PoolClient を VercelPoolClient に変更
+  client: PoolClient, // 👈 修正: VercelPoolClient を PoolClient に変更
   userId: string, // DBの内部UUID
   accessToken: string
 ) {
@@ -30,7 +30,8 @@ async function saveAllFollowingArtists(
   }
 
   // 挿入クエリの構築
-  const values: (string | number | null)[] = []; // 👈 any[] から変更
+  // ... (中略: values, queryRows, insertQuery) ...
+  const values: (string | number | null)[] = []; 
   const queryRows = artists.map((artist, index) => {
     const i = index * 5; // 各行の値のインデックス
     values.push(
@@ -59,30 +60,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ message: 'Method Not Allowed' });
   }
 
-  // ▼▼▼ accessToken を受け取る ▼▼▼
+  // ... (中略: req.body, 必須項目チェック) ...
   const { spotifyUserId, nickname, profileImageUrl, bio, accessToken } = req.body;
-  // ▲▲▲
 
-  // 必須項目チェック
   if (!spotifyUserId || !nickname) {
     return res.status(400).json({ message: 'Missing required fields: spotifyUserId and nickname' });
-  } //
+  } 
 
-  // ▼▼▼ accessToken のチェックを追加 ▼▼▼
   if (!accessToken) {
     return res.status(400).json({ message: 'Missing required field: accessToken' });
   }
-  // ▲▲▲
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN'); // トランザクション開始
 
     // 1. ユーザープロフィールを users テーブルに挿入または更新
+    // ... (中略: userCheck, userId の決定, insert/update) ...
     const userCheck = await client.query(
       'SELECT id FROM users WHERE spotify_user_id = $1',
       [spotifyUserId]
-    ); //
+    ); 
 
     let userId: string; // DBの内部UUID
     if (userCheck.rows.length > 0) {
@@ -91,31 +89,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await client.query(
         'UPDATE users SET nickname = $1, profile_image_url = $2, bio = $3, updated_at = CURRENT_TIMESTAMP WHERE spotify_user_id = $4',
         [nickname, profileImageUrl || null, bio || null, spotifyUserId]
-      ); //
+      ); 
     } else {
       // ユーザーが存在しない場合は新規挿入
       const insertResult = await client.query(
         'INSERT INTO users (spotify_user_id, nickname, profile_image_url, bio) VALUES ($1, $2, $3, $4) RETURNING id',
         [spotifyUserId, nickname, profileImageUrl || null, bio || null]
-      ); //
+      ); 
       userId = insertResult.rows[0].id;
     }
 
-    // 2. ▼▼▼ アーティスト保存ロジックの呼び出し ▼▼▼
+    // 2. 
     // (プロフィール保存が成功した後、同じトランザクション内で実行)
     await saveAllFollowingArtists(client, userId, accessToken);
-    // ▲▲▲
+    // 
 
     await client.query('COMMIT'); // トランザクションコミット
     
-    // ▼▼▼ 追加 ▼▼▼
+    // 
     // プロフィール保存とアーティスト保存が成功したら、
     // 非同期でグラフ全体の再計算をトリガーする (await しない)
     fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/batch/calculate-graph`)
       .catch(err => {
         console.error('Failed to trigger background graph calculation:', err);
       });
-    // ▲▲▲ 追加 ▲▲▲
+    // 
 
     res.status(200).json({ message: 'Profile and artists saved successfully!', userId: userId });
 
