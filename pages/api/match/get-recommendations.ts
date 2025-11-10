@@ -1,19 +1,17 @@
 // pages/api/match/get-recommendations.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
-// 
 
-// 内部UUIDを取得するヘルパー (pool.query を直接使う)
+// (getUserIdBySpotifyId, getMyCommunityId ヘルパー関数は変更なし)
 async function getUserIdBySpotifyId(spotifyUserId: string): Promise<string | null> {
     const res = await pool.query('SELECT id FROM users WHERE spotify_user_id = $1', [spotifyUserId]);
     return res.rows.length > 0 ? res.rows[0].id : null;
 }
-
-// 自分のコミュニティIDを取得するヘルパー (pool.query を直接使う)
 async function getMyCommunityId(selfId: string): Promise<number | null> {
     const res = await pool.query('SELECT community_id FROM communities WHERE user_id = $1', [selfId]);
     return res.rows.length > 0 ? res.rows[0].community_id : null;
 }
+
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') {
@@ -25,7 +23,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-        // 
         const selfId = await getUserIdBySpotifyId(spotifyUserId);
         if (!selfId) {
             return res.status(404).json({ message: 'User not found.' });
@@ -33,11 +30,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         const myCommunityId = await getMyCommunityId(selfId);
         
-        // 設計書 6.2 (マッチングスコア) と 6.3 (多様性) に基づくクエリ
-        // ▼▼▼ クエリを修正 ▼▼▼
-        const query = `
+        // ▼▼▼【修正】ここからロジックを変更 ▼▼▼
+
+        // ベースとなるクエリ（閾値の指定を削除）
+        const baseQuery = `
             WITH MySimilarities AS (
-                -- (変更なし)
                 SELECT
                     CASE WHEN user_a_id = $1 THEN user_b_id ELSE user_a_id END AS other_user_id,
                     artist_similarity,
@@ -47,10 +44,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     common_genres
                 FROM similarities
                 WHERE (user_a_id = $1 OR user_b_id = $1)
-                  AND combined_similarity >= 0.20
             ),
             MatchesWithCommunity AS (
-                -- (変更なし)
                 SELECT
                     s.other_user_id,
                     s.artist_similarity,
@@ -68,36 +63,50 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 JOIN users u ON s.other_user_id = u.id
                 LEFT JOIN communities c ON s.other_user_id = c.user_id
             ),
-            -- ▼▼▼ 【追加】フォロー状態を JOIN ▼▼▼
             MatchesWithFollowStatus AS (
                 SELECT
                     m.*,
                     f.status AS follow_status,
-                    -- 自分がリクエストを送ったか (自分がfollower)
                     (f.follower_id = $1) AS i_am_follower
                 FROM MatchesWithCommunity m
-                -- 相手との関係性を follows テーブルから探す (双方向)
                 LEFT JOIN follows f ON
                     (f.follower_id = $1 AND f.following_id = m.other_user_id) OR
                     (f.follower_id = m.other_user_id AND f.following_id = $1)
             )
-            -- スコア順にソートして上位10件
             SELECT *
             FROM MatchesWithFollowStatus
+        `;
+        
+        // Tier 1: 閾値(0.20)ありのクエリ
+        const primaryQuery = `
+            ${baseQuery}
+            WHERE combined_similarity >= 0.20
             ORDER BY match_score DESC
             LIMIT 10;
         `;
-        // ▲▲▲ クエリ修正ここまで ▲▲▲
         
-        // pool.query を直接呼び出す
-        const { rows } = await pool.query(query, [selfId, myCommunityId]);
+        let { rows } = await pool.query(primaryQuery, [selfId, myCommunityId]);
+
+        // Tier 2: 閾値なしのフォールバッククエリ (Tier 1で0件だった場合)
+        if (rows.length === 0) {
+            console.log(`[get-recommendations] No matches found >= 0.20 for user ${selfId}. Running fallback query.`);
+            
+            // 閾値なし、ただし類似度0は除外する
+            const fallbackQuery = `
+                ${baseQuery}
+                WHERE combined_similarity > 0 
+                ORDER BY match_score DESC
+                LIMIT 10;
+            `;
+            const fallbackResult = await pool.query(fallbackQuery, [selfId, myCommunityId]);
+            rows = fallbackResult.rows;
+        }
+        // ▲▲▲ 修正ここまで ▲▲▲
 
         res.status(200).json({ matches: rows });
-        // 
 
     } catch (dbError) {
         console.error('Recommendation calculation failed:', dbError);
         res.status(500).json({ message: 'Failed to get recommendations.' });
     }
-    // finally { client.release() } は不要
 }
