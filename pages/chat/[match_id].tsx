@@ -217,7 +217,7 @@ export default function ChatRoom() {
                                 {new Date(msg.created_at).toLocaleString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
                             </p>
                             {/* ▲▲▲ 追加ここまで ▲▲▲ */}
-                            
+
                         </div>
                     </div>
                 ))}
@@ -251,3 +251,15 @@ export default function ChatRoom() {
         </div>
     );
 }
+
+/**
+ * [デプロイエラー修正]
+ * このページはSupabaseクライアント（localStorageを参照する）をインポートするため、
+ * ビルド時に静的生成(SSG)できません。
+ * * 空の getServerSideProps を追加することで、
+ * このページをリクエスト時にサーバーサイドでレンダリング（SSR）するよう Next.js に指示し、
+ * ビルド時の localStorage エラーを回避します。
+ */
+export const getServerSideProps = async () => {
+  return { props: {} };
+};
