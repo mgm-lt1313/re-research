@@ -163,7 +163,9 @@ export default function ChatRoom() {
 
     // (JSX の return 部分は変更なし)
     return (
-        <div className="flex flex-col h-screen max-w-lg mx-auto bg-gray-900 text-white">
+        // ▼▼▼ 修正: h-screen から h-[calc(100vh-theme(spacing.20))] に変更 (NavBarの高さを引く) ▼▼▼
+        // (NavBarが5rem = 20 * 0.25rem = 80px と仮定)
+        <div className="flex flex-col h-[calc(100vh-5rem)] max-w-lg mx-auto bg-gray-900 text-white">
             {/* ヘッダー (修正) */}
             <header className="bg-gray-800 p-4 shadow-md flex items-center justify-between sticky top-0 z-10">
                 <div className="flex items-center space-x-3">
@@ -195,12 +197,13 @@ export default function ChatRoom() {
                 {/* ▲▲▲ 修正ここまで ▲▲▲ */}
             </header>
 
-            {/* メッセージリスト */}
-            <main className="flex-1 overflow-y-auto p-4 space-y-4">
-                 {loading && messages.length === 0 && (
-                    <div className="text-center text-gray-400">メッセージ履歴を読み込み中...</div>
-                 )}
-                {messages.map((msg) => (
+            {/* ▼▼▼ 修正: メッセージリスト (flex-col-reverse を追加) ▼▼▼ */}
+            <main className="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col-reverse">
+                 {/* 1. スクロール用のrefは一番下に（つまりflex-reverseでは一番上） */}
+                 <div ref={messagesEndRef} />
+
+                 {/* 2. メッセージを逆順でmap ( .reverse() を追加 ) */}
+                 {messages.length > 0 && [...messages].reverse().map((msg) => (
                     <div key={msg.id} className={`flex ${
                         msg.sender_id === otherUserId ? 'justify-start' : 'justify-end'
                     }`}>
@@ -210,18 +213,19 @@ export default function ChatRoom() {
                                 : 'bg-blue-600' // 自分のメッセージ
                         }`}>
                             <p>{msg.content}</p>
-                            {/* ▼▼▼ タイムスタンプ表示を追加 ▼▼▼ */}
                             <p className={`text-xs mt-1 ${
                                 msg.sender_id === otherUserId ? 'text-gray-400' : 'text-blue-200'
                             }`}>
                                 {new Date(msg.created_at).toLocaleString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
                             </p>
-                            {/* ▲▲▲ 追加ここまで ▲▲▲ */}
-
                         </div>
                     </div>
-                ))}
-                <div ref={messagesEndRef} />
+                 ))}
+                 
+                 {loading && messages.length === 0 && (
+                    <div className="text-center text-gray-400">メッセージ履歴を読み込み中...</div>
+                 )}
+                 {/* ▲▲▲ 修正ここまで ▲▲▲ */}
             </main>
 
             {/* メッセージ入力フォーム */}

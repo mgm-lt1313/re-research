@@ -1,9 +1,7 @@
 // pages/user/[id].tsx
-import { useRouter } from 'next/router';
+// 👈 1. next/router, next/image, next/link, GetServerSideProps のインポートを削除
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import Image from 'next/image';
-import Link from 'next/link';
 
 // ユーザー詳細データの型
 interface UserDetail {
@@ -25,20 +23,39 @@ interface UserDetail {
 }
 
 export default function UserProfilePage() {
-  const router = useRouter();
-  const { id: targetUserId, selfSpotifyId } = router.query as {
-    id?: string;
-    selfSpotifyId?: string;
-  };
+  // 👈 2. router を削除し、StateでIDを管理
+  const [targetUserId, setTargetUserId] = useState<string | null>(null);
+  const [selfSpotifyId, setSelfSpotifyId] = useState<string | null>(null);
 
   const [user, setUser] = useState<UserDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [followLoading, setFollowLoading] = useState(false);
 
+  // 👈 3. window.locationからIDを取得するuseEffectを追加
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const id = window.location.pathname.split('/').pop() || null;
+      const selfId = params.get('selfSpotifyId');
+      
+      setTargetUserId(id);
+      setSelfSpotifyId(selfId);
+
+      // localStorageからもフォールバック (NavBarからの遷移用)
+      if (!selfId) {
+        const storedSelfId = localStorage.getItem('spotify_user_id');
+        if (storedSelfId) {
+          setSelfSpotifyId(storedSelfId);
+        }
+      }
+    }
+  }, []); // ページロード時に1回だけ実行
+
+  useEffect(() => {
+    // 👈 4. 依存配列を State のIDに変更
     if (!targetUserId || !selfSpotifyId) {
-        if(router.isReady) setLoading(false);
+        setLoading(false);
         return;
     }
 
@@ -58,9 +75,9 @@ export default function UserProfilePage() {
       }
     };
     fetchUser();
-  }, [targetUserId, selfSpotifyId, router.isReady]);
+  }, [targetUserId, selfSpotifyId]); // 👈 依存配列を変更
 
-  // フォロー/フォロー解除処理
+  // フォロー/フォロー解除処理 (変更なし)
   const handleFollow = async () => {
     if (followLoading || !user || !selfSpotifyId) return;
     setFollowLoading(true);
@@ -112,7 +129,7 @@ export default function UserProfilePage() {
 
   const { profile, similarity, follow_status, i_am_follower } = user;
   
-  // フォローボタンのテキストとスタイル
+  // フォローボタンのテキストとスタイル (変更なし)
   let followButtonText = 'フォロー';
   let followButtonClass = 'bg-blue-600 hover:bg-blue-700';
   if (follow_status === 'approved') {
@@ -128,15 +145,15 @@ export default function UserProfilePage() {
 
   return (
     <div className="p-4 max-w-xl mx-auto text-white">
-      {/* 戻るボタン */}
-      <Link href={{ pathname: '/matches', query: { spotifyUserId: selfSpotifyId } }} className="text-blue-400 hover:text-blue-300 mb-4 inline-block">
+      {/* 👈 5. Link を <a> に変更 */}
+      <a href={`/matches?spotifyUserId=${selfSpotifyId}`} className="text-blue-400 hover:text-blue-300 mb-4 inline-block transition-colors">
         &lt; マッチング一覧に戻る
-      </Link>
+      </a>
       
-      {/* ユーザーヘッダー */}
+      {/* ユーザーヘッダー (👈 6. Image を <img> に変更) */}
       <div className="flex items-center space-x-4 mb-4">
         {profile.profile_image_url ? (
-          <Image src={profile.profile_image_url} alt={profile.nickname} width={80} height={80} className="w-20 h-20 rounded-full object-cover" />
+          <img src={profile.profile_image_url} alt={profile.nickname} className="w-20 h-20 rounded-full object-cover" />
         ) : (
           <div className="w-20 h-20 rounded-full bg-gray-600"></div>
         )}
@@ -146,16 +163,16 @@ export default function UserProfilePage() {
         </div>
       </div>
 
-      {/* フォローボタン */}
+      {/* フォローボタン (変更なし) */}
       <button
         onClick={handleFollow}
         disabled={followLoading}
-        className={`w-full py-2 px-4 rounded font-bold text-white ${followLoading ? 'bg-gray-500' : followButtonClass}`}
+        className={`w-full py-2 px-4 rounded font-bold text-white transition-colors ${followLoading ? 'bg-gray-500' : followButtonClass}`}
       >
         {followLoading ? '処理中...' : followButtonText} [cite: 46]
       </button>
 
-      {/* 類似度情報 */}
+      {/* 類似度情報 (変更なし) */}
       {similarity && (
         <div className="bg-gray-800 p-6 rounded-lg shadow-md my-6">
           <h2 className="text-xl font-bold mb-4">あなたとの共通点</h2>
@@ -190,8 +207,8 @@ export default function UserProfilePage() {
         </div>
       )}
       
-      {/* 相手のアーティスト一覧 (PDF [cite: 54] にありますが、実装が複雑なため今回は省略) */}
-      
     </div>
   );
 }
+
+// 👈 7. getServerSideProps を削除

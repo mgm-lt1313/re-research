@@ -77,13 +77,13 @@ export default function Matches() {
         <ul className="space-y-4">
           {matches.map((match) => (
             <li key={match.other_user_id} className="bg-gray-800 p-4 rounded-lg shadow-md">
-              {/* ユーザー詳細ページへのリンクを追加 [cite: 31] */}
+              {/* ユーザー詳細ページへのリンク */}
               <Link 
                 href={{ 
                   pathname: `/user/${match.other_user_id}`,
                   query: { selfSpotifyId: spotifyUserId } 
                 }}
-                className="flex items-center space-x-4"
+                className="flex space-x-4" // 👈 items-center を削除
               >
                 {/* アイコン */}
                 {match.profile_image_url ? (
@@ -92,18 +92,36 @@ export default function Matches() {
                   <div className="w-14 h-14 rounded-full bg-gray-600 flex-shrink-0"></div>
                 )}
                 
-                {/* ユーザー情報 */}
-                <div className="flex-grow min-w-0">
-                  <h3 className="text-lg font-bold truncate">{match.nickname} [cite: 31, 35]</h3>
-                  <p className="text-sm text-gray-300 truncate">{match.bio || '(自己紹介なし)'} [cite: 33, 36]</p>
+                {/* ユーザー情報 (min-w-0 を削除) */}
+                <div className="flex-grow">
+                  <h3 className="text-lg font-bold truncate">{match.nickname}</h3>
                   
-                  {/* マッチ率 [cite: 32, 34, 37, 38] */}
+                  {/* マッチ率 */}
                   <div className="text-sm mt-1">
                       <span className="font-bold text-green-400">マッチ率: {Math.round(match.combined_similarity * 100)}%</span>
                       <span className="text-xs text-gray-400 ml-2">
                           (アーティスト: {Math.round(match.artist_similarity * 100)}%, ジャンル: {Math.round(match.genre_similarity * 100)}%)
                       </span>
                   </div>
+
+                  {/* ▼▼▼ UI改善: 共通点を表示 ▼▼▼ */}
+                  {match.common_artists && match.common_artists.length > 0 ? (
+                    <div className="text-xs text-gray-300 mt-2">
+                      <span className="font-semibold">共通アーティスト:</span>
+                      <span className="ml-1">{match.common_artists.slice(0, 2).join(', ')}{match.common_artists.length > 2 ? ' ...' : ''}</span>
+                    </div>
+                  ) : match.common_genres && match.common_genres.length > 0 ? (
+                    <div className="text-xs text-gray-300 mt-2">
+                      <span className="font-semibold">共通ジャンル:</span>
+                      <span className="ml-1">{match.common_genres.slice(0, 2).join(', ')}{match.common_genres.length > 2 ? ' ...' : ''}</span>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-400 mt-2">
+                      (詳細を見る)
+                    </div>
+                  )}
+                  {/* ▲▲▲ UI改善ここまで ▲▲▲ */}
+
                 </div>
               </Link>
             </li>

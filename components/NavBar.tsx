@@ -1,6 +1,8 @@
 // components/NavBar.tsx
 import { useRouter } from 'next/router';
 import Link from 'next/link';
+import { useState, useEffect } from 'react'; // 👈 1. useState と useEffect をインポート
+import { supabase } from '../lib/supabaseClient'; // 👈 2. Supabase のインポート
 
 // ナビゲーションアイテムの型
 interface NavItem {
@@ -9,7 +11,7 @@ interface NavItem {
   icon: string; // 簡単なSVGアイコン
 }
 
-// アイコンコンポーネント
+// --- (アイコンコンポーネントは変更なし) ---
 const ProfileIcon = () => (
   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -30,21 +32,42 @@ const ChatIcon = () => (
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
   </svg>
 );
-// ▼▼▼ ログアウトアイコンを追加 ▼▼▼
 const LogoutIcon = () => (
   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
   </svg>
 );
-// ▲▲▲ 修正ここまで ▲▲▲
+// --- (アイコンコンポーネントここまで) ---
 
 
 export default function NavBar() {
   const router = useRouter();
-  // spotifyUserId をクエリから取得
   const { spotifyUserId } = router.query as { spotifyUserId?: string };
-  // ▼▼▼ 修正: access_token もクエリから取得 ▼▼▼
   const { access_token } = router.query as { access_token?: string };
+
+  // --- ▼▼▼ エラー ts(2304) 修正 ▼▼▼ ---
+  
+  // 1. 'hydratedSpotifyId' のエラー修正:
+  // (これが 'hydratedSpotifyId' の役割です)
+  // サーバーサイドでは null、クライアント側でのみ localStorage から値を取得する
+  const [clientSpotifyId, setClientSpotifyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    // このコードはブラウザ（クライアント）でのみ実行されます
+    const storedId = localStorage.getItem('spotify_user_id');
+    if (storedId) {
+      setClientSpotifyId(storedId);
+    }
+  }, []); // マウント時に1回だけ実行
+
+  // ページ描画に使用するID (クエリパラメータを優先し、なければ localStorage の値)
+  const currentSpotifyId = spotifyUserId || clientSpotifyId;
+
+  // 2. 'currentPath' のエラー修正:
+  // router.pathname から変数を定義します
+  const currentPath = router.pathname;
+  
+  // --- ▲▲▲ 修正ここまで ▲▲▲ ---
 
   const navItems: NavItem[] = [
     { href: `/profile`, label: 'プロフィール', icon: 'profile' },
@@ -59,36 +82,29 @@ export default function NavBar() {
       case 'match': return <MatchIcon />;
       case 'follow': return <FollowIcon />;
       case 'chat': return <ChatIcon />;
-    //    ▼▼▼ ログアウトアイコンのcaseを追加 ▼▼▼
       case 'logout': return <LogoutIcon />;
       default: return null;
     }
   };
-  // ▼▼▼ ログアウト処理を追加 ▼▼▼
-  const handleLogout = () => {
+
+  // ログアウト処理 (localStorage と Supabase セッションの両方をクリア)
+  const handleLogout = async () => {
     localStorage.removeItem('spotify_access_token');
     localStorage.removeItem('spotify_user_id');
+    setClientSpotifyId(null); // 👈 内部の state もクリア
+    await supabase.auth.signOut();
     router.push('/'); // ログインページに戻る
   };
   
-  // ▼▼▼ 修正: 判定ロジックを修正 ▼▼▼
-  // spotifyUserId も access_token もない場合は表示しない
-  if (!spotifyUserId && !access_token && router.pathname.startsWith('/chat/')) {
-     // トークン情報が何もないチャットルーム詳細ページでは非表示
-     return null;
-  }
-  if (router.pathname === '/') {
-      // ルートページ (ログイン画面) では非表示
+  // ログインページでは非表示
+  if (currentPath === '/') {
       return null;
   }
-  // ▲▲▲ 修正ここまで ▲▲▲
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-50">
       <div className="max-w-lg mx-auto flex justify-around">
         {navItems.map((item) => {
-          // ▼▼▼ 修正: クエリの引き継ぎロジックを簡素化 ▼▼▼
-          const currentSpotifyId = spotifyUserId || localStorage.getItem('spotify_user_id');
           const query: { [key: string]: string } = {};
 
           if (item.href === '/profile') {
@@ -96,13 +112,14 @@ export default function NavBar() {
             if (access_token) query.access_token = access_token;
           }
           
-          // 他のページは spotifyUserId を必須とする
+          // 👈 'hydratedSpotifyId' の代わりに 'currentSpotifyId' を使用
           if (item.href !== '/profile' && currentSpotifyId) {
              query.spotifyUserId = currentSpotifyId;
           }
-          // ▲▲▲ 修正ここまで ▲▲▲
 
-          const isActive = router.pathname === item.href;
+          // 👈 'currentPath' を使用
+          const isActive = currentPath === item.href;
+          
           return (
             <Link
               key={item.label}
@@ -116,7 +133,7 @@ export default function NavBar() {
             </Link>
           );
         })}
-        {/* ▼▼▼ ログアウトボタンを追加 ▼▼▼ */}
+        {/* ログアウトボタン */}
         <button
           onClick={handleLogout}
           className="flex-1 flex flex-col items-center justify-center p-2 text-xs font-medium text-gray-400 hover:text-white transition-colors"
@@ -124,7 +141,6 @@ export default function NavBar() {
           {getIcon('logout')}
           <span>ログアウト</span>
         </button>
-        {/* ▲▲▲ 修正ここまで ▲▲▲ */}
       </div>
     </nav>
   );

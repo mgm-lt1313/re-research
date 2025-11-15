@@ -204,6 +204,7 @@ export default function Profile() {
   }, [access_token]);
 
   // プロフィール保存処理
+  // プロフィール保存処理
   const handleProfileSubmit = async (e: FormEvent) => { 
     e.preventDefault();
     if (!spotifyProfile || !nickname.trim()) return setError('ニックネームは必須です。');
@@ -211,11 +212,15 @@ export default function Profile() {
     setLoading(true); 
     setError(null);
     
+    // ▼▼▼ UI改善: 画像URLが空ならSpotifyの画像をフォールバック ▼▼▼
+    const imageUrlToSave = profileImageUrl.trim() || spotifyProfile?.images?.[0]?.url || null;
+    // ▲▲▲ UI改善ここまで ▲▲▲
+    
     try {
       await axios.post('/api/profile/save', {
         spotifyUserId: spotifyProfile.id, 
         nickname, 
-        profileImageUrl, 
+        profileImageUrl: imageUrlToSave, // 👈 修正した変数を使用
         bio,
         accessToken: access_token, 
       }); 
@@ -229,8 +234,7 @@ export default function Profile() {
       });
 
     } catch (e: unknown) {
-      console.error('プロフィール保存エラー:', e);
-      setError(`プロフィールの保存中にエラーが発生しました。`);
+      // ... (エラーハンドリング) ...
     } finally { 
       setLoading(false); 
     }
