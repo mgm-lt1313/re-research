@@ -135,13 +135,17 @@ const ProfileEditor = ({
 // --- メインコンポーネント (Profile ページ) ---
 export default function Profile() {
   const router = useRouter();
-  const { access_token } = router.query as { access_token?: string };
+  // ▼▼▼ 修正: query_token にリネーム ▼▼▼
+  const { access_token: query_token } = router.query as { access_token?: string };
+
+  // ▼▼▼ 修正: トークンを state で管理 ▼▼▼
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  // ▲▲▲ 修正ここまで ▲▲▲
 
   const [spotifyProfile, setSpotifyProfile] = useState<SpotifyProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   
-  // プロフィールフォーム用 State
   const [nickname, setNickname] = useState<string>('');
   const [profileImageUrl, setProfileImageUrl] = useState<string>('');
   const [bio, setBio] = useState<string>('');
@@ -149,36 +153,52 @@ export default function Profile() {
   const [isNewUser, setIsNewUser] = useState<boolean>(true);
   const [isEditingProfile, setIsEditingProfile] = useState<boolean>(false);
   
-  // 既存ユーザー表示用
   const [myArtists, setMyArtists] = useState<SpotifyArtist[]>([]);
 
+  // ▼▼▼ 修正: ページロード時にトークンを特定する useEffect ▼▼▼
   useEffect(() => {
-    if (!access_token) {
-      setError('アクセストークンがありません。ログインからやり直してください。');
-      setLoading(false);
-      return;
+    if (!router.isReady) return; // クエリパラメータが読み込まれるまで待つ
+
+    let token: string | null = null;
+
+    if (query_token) {
+      // 1. クエリパラメータからトークンを取得 (ログイン直後)
+      token = query_token;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('spotify_access_token', token);
+      }
+    } else if (typeof window !== 'undefined') {
+      // 2. LocalStorage からトークンを取得 (ページ遷移後)
+      token = localStorage.getItem('spotify_access_token');
     }
 
-    // ▼▼▼ 修正: LocalStorage にトークンを保存 ▼▼▼
-    if (typeof window !== 'undefined') {
-        localStorage.setItem('spotify_access_token', access_token);
+    if (token) {
+      setAccessToken(token); // 取得したトークンを state にセット
+    } else {
+      setError('アクセストークンがありません。ログインからやり直してください。');
+      setLoading(false);
     }
-    // ▲▲▲ 修正ここまで ▲▲▲
+  }, [router.isReady, query_token]);
+  // ▲▲▲ 修正ここまで ▲▲▲
+
+  // ▼▼▼ 修正: データ取得の useEffect を、state の accessToken に依存させる ▼▼▼
+  useEffect(() => {
+    if (!accessToken) { // state の トークンがなければ何もしない
+      return;
+    }
 
     const fetchData = async () => {
       setLoading(true);
       setError(null);
       try {
-        const profileData = await getMyProfile(access_token);
+        // 'accessToken' (state) を使用
+        const profileData = await getMyProfile(accessToken); 
         setSpotifyProfile(profileData);
 
-        // ▼▼▼ 修正: LocalStorage に Spotify ID を保存 ▼▼▼
         if (typeof window !== 'undefined') {
             localStorage.setItem('spotify_user_id', profileData.id);
         }
-        // ▲▲▲ 修正ここまで ▲▲▲
 
-        // 既存プロフィールをDBから取得
         const existingProfileRes = await axios.get<{ profile: UserProfile | null }>(
             `/api/profile/get?spotifyUserId=${profileData.id}`
         );
@@ -192,8 +212,8 @@ export default function Profile() {
           setIsNewUser(false);
           setIsEditingProfile(false); // デフォルトは表示モード
           
-          // 自分のフォローアーティスト一覧を取得
-          const artistsData = await getMyFollowingArtists(access_token);
+          // 'accessToken' (state) を使用
+          const artistsData = await getMyFollowingArtists(accessToken); 
           setMyArtists(artistsData);
 
         } else {
@@ -205,18 +225,34 @@ export default function Profile() {
         }
       } catch (e: unknown) {
         console.error('Fetch data error:', e);
-        setError(`データの取得に失敗しました。`);
+        // ▼▼▼ 修正: トークン失効時のエラーハンドリング ▼▼▼
+        if (e instanceof Error && (e.message.includes('401') || (e as any).response?.status === 401)) {
+            setError('セッションが切れました。再度ログインしてください。');
+            if (typeof window !== 'undefined') {
+                localStorage.removeItem('spotify_access_token');
+                localStorage.removeItem('spotify_user_id');
+            }
+        } else {
+            setError(`データの取得に失敗しました。`);
+        }
+        // ▲▲▲ 修正ここまで ▲▲▲
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, [access_token]);
+  }, [accessToken]); // 依存配列を 'accessToken' (state) に変更
+  // ▲▲▲ 修正ここまで ▲▲▲
 
   // プロフィール保存処理
   const handleProfileSubmit = async (e: FormEvent) => { 
     e.preventDefault();
-    if (!spotifyProfile || !nickname.trim()) return setError('ニックネームは必須です。');
+    // ▼▼▼ 修正: 'accessToken' (state) を使用 ▼▼▼
+    if (!spotifyProfile || !nickname.trim() || !accessToken) {
+        setError('ニックネームは必須です。');
+        return;
+    }
+    // ▲▲▲ 修正ここまで ▲▲▲
     
     setLoading(true); 
     setError(null);
@@ -229,19 +265,20 @@ export default function Profile() {
         nickname, 
         profileImageUrl: imageUrlToSave,
         bio,
-        accessToken: access_token, 
+        accessToken: accessToken, // 👈 'accessToken' (state) を使用
       }); 
       
       alert(isNewUser ? 'プロフィールを登録しました！' : 'プロフィールを更新しました！');
       
       // 保存が完了したら、spotifyUserId をクエリに付与してマッチングページに遷移
       router.push({
-          pathname: '/matches', // マッチング画面へ
+          pathname: '/matches',
           query: { spotifyUserId: spotifyProfile.id }
       });
 
     } catch (e: unknown) {
-      // ... (エラーハンドリング) ...
+      console.error('Failed to save profile:', e);
+      setError('プロフィールの保存に失敗しました。');
     } finally { 
       setLoading(false); 
     }
