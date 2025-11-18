@@ -1,11 +1,22 @@
+// next.config.js
 module.exports = {
   images: {
-    domains: ['i.scdn.co'], // Spotify画像のドメイン
+    // domains: ['i.scdn.co'], // 👈 この行をコメントアウトするか削除し、
+    
+    // ▼▼▼ 以下 remotePatterns を追加 ▼▼▼
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'i.scdn.co', // 既存のSpotifyドメイン
+      },
+      {
+        protocol: 'https',
+        hostname: 'yboaukncljdigwxwtju.supabase.co', // 👈 Supabaseドメイン
+      },
+    ],
+    // ▲▲▲ 追加ここまで ▲▲▲
   },
-  // ▼▼▼ 以下の3行を追記 ▼▼▼
   eslint: {
-    // ビルド時にESLintエラーがあってもビルドを続行する
     ignoreDuringBuilds: true,
   },
-  // ▲▲▲ 追記ここまで ▲▲▲
 };
