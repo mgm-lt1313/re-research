@@ -324,7 +324,16 @@ export default function Profile() {
               query: { spotifyUserId: spotifyProfile.id }
           });
       } else {
-          router.reload();
+          // プレビュー用の blob URL を破棄し、DBから取得した (はずの) URL を state にセットし直す
+          if (finalImageUrl?.startsWith('blob:')) {
+            URL.revokeObjectURL(finalImageUrl);
+          }
+          setProfileImageUrl(finalImageUrl); // 保存した URL に state を更新
+          // ページリロードの代わりにアーティスト情報を再取得
+          const artistsData = await getMyFollowingArtists(accessToken); 
+          setMyArtists(artistsData);
+          setIsNewUser(false);
+          // router.reload(); // router.reload() は state の更新と競合する可能性があるためコメントアウト
       }
 
     } catch (e: unknown) {

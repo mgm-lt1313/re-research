@@ -1,17 +1,17 @@
 // next.config.js
 module.exports = {
   images: {
-    // domains: ['i.scdn.co'], // 👈 この行をコメントアウトするか削除し、
+    // domains: ['i.scdn.co'], // 👈 この行は削除
     
     // ▼▼▼ 以下 remotePatterns を追加 ▼▼▼
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'i.scdn.co', // 既存のSpotifyドメイン
+        hostname: 'i.scdn.co', // Spotifyドメイン
       },
       {
         protocol: 'https',
-        hostname: 'yboaukncljdigwxwtju.supabase.co', // 👈 Supabaseドメイン
+        hostname: 'yboaukncljdigwxwtju.supabase.co', // 👈 あなたのSupabaseドメイン
       },
     ],
     // ▲▲▲ 追加ここまで ▲▲▲
