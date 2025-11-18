@@ -2,7 +2,6 @@
 import '../styles/globals.css';
 import type { AppProps } from 'next/app';
 import Head from 'next/head';
-// import NavBar from '../components/NavBar'; // 👈 1. NavBar のインポートを削除
 import Header from '../components/Header';
 import { useRouter } from 'next/router';
 
@@ -18,12 +17,12 @@ function MyApp({ Component, pageProps }: AppProps) {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       </Head>
       
-      {/* ▼▼▼ この div のクラス名を変更します ▼▼▼ */}
-      <div className="min-h-screen bg-white text-gray-900">
+      {/* ▼▼▼ この div のクラス名を元に戻します ▼▼▼ */}
+      <div className="dark min-h-screen bg-gray-900 text-white">
       {/* 変更点：
-        1. `dark` を削除
-        2. `bg-gray-900` を `bg-white` に変更
-        3. `text-white` を `text-gray-900` に変更
+        1. `dark` を復活
+        2. `bg-white` を `bg-gray-900` に変更
+        3. `text-gray-900` を `text-white` に変更
       */}
       {/* ▲▲▲ 変更ここまで ▲▲▲ */}
         
