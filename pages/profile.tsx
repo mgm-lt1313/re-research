@@ -61,7 +61,7 @@ const ProfileEditor = ({
       </h2>
       <form onSubmit={handleProfileSubmit} className="space-y-4">
         
-        {/* ▼▼▼ アイコンアップロード機能 (ロジック修正) ▼▼▼ */}
+        {/* ▼▼▼ アイコンアップロード機能 (プレビューロジック修正) ▼▼▼ */}
         <div>
           <label className="block text-white text-sm font-bold mb-2">プロフィール画像 (任意)</label>
           <div className="flex items-center space-x-4">
@@ -324,16 +324,18 @@ export default function Profile() {
               query: { spotifyUserId: spotifyProfile.id }
           });
       } else {
-          // プレビュー用の blob URL を破棄し、DBから取得した (はずの) URL を state にセットし直す
-          if (finalImageUrl?.startsWith('blob:')) {
-            URL.revokeObjectURL(finalImageUrl);
+          // ▼▼▼ 修正: プレビューURLを破棄し、保存したURLをセットし直す ▼▼▼
+          if (profileImageUrl?.startsWith('blob:')) {
+            URL.revokeObjectURL(profileImageUrl);
           }
           setProfileImageUrl(finalImageUrl); // 保存した URL に state を更新
-          // ページリロードの代わりにアーティスト情報を再取得
+          
+          // アーティスト情報を再取得 (reloadの代わり)
           const artistsData = await getMyFollowingArtists(accessToken); 
           setMyArtists(artistsData);
           setIsNewUser(false);
-          // router.reload(); // router.reload() は state の更新と競合する可能性があるためコメントアウト
+          // router.reload(); // 👈 削除
+          // ▲▲▲ 修正ここまで ▲▲▲
       }
 
     } catch (e: unknown) {
