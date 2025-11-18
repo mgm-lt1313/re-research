@@ -186,24 +186,22 @@ export default function UserProfilePage() {
             </span>
           </div>
 
-          {/* ▼▼▼ 2a. 共通アーティストの表示 (名前 + アイコン) ▼▼▼ */}
           <div className="mb-4">
             <h3 className="font-semibold mb-2">共通しているフォローアーティスト</h3>
             {similarity.common_artists.length > 0 ? (
               <div className="flex flex-wrap gap-2">
-                {similarity.common_artists.map(artist => (
-                  <div key={artist.name} className="flex items-center space-x-2 bg-gray-700 px-3 py-1 rounded-full">
-                    {artist.image_url && (
-                      <Image src={artist.image_url} alt={artist.name} width={20} height={20} className="w-5 h-5 rounded-full object-cover" />
-                    )}
-                    <span className="text-sm">{artist.name}</span>
-                  </div>
+                {/* 注：この `common_artists` は、次のステップ 2a で修正するまで
+                  まだID（または古い名前）のままの可能性があります。
+                  2aの修正が完了すると、ここもアイコン付きで表示されます。
+                */}
+                {similarity.common_artists.map((artist: any) => (
+                  <span key={artist.name || artist} className="bg-gray-700 px-3 py-1 rounded-full text-sm">
+                    {artist.name || artist}
+                  </span>
                 ))}
               </div>
             ) : <p className="text-gray-400 text-sm">共通のアーティストはいません。</p>}
           </div>
-          {/* ▲▲▲ 修正ここまで ▲▲▲ */}
-
 
           <div>
             <h3 className="font-semibold mb-2">共通しているジャンル</h3>
