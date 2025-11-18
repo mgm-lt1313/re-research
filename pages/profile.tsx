@@ -6,35 +6,41 @@ import { SpotifyProfile, getMyProfile, SpotifyArtist, getMyFollowingArtists } fr
 import Image from 'next/image';
 import { supabase } from '../lib/supabaseClient';
 
-// --- (型定義、DefaultProfileIcon は変更なし) ---
+// --- (型定義 UserProfile は変更なし) ---
 interface UserProfile {
   nickname: string;
   profile_image_url: string | null;
   bio: string | null;
 }
+
+// --- (デフォルトアイコンコンポーネント) ---
 const DefaultProfileIcon = () => (
   <svg className="w-24 h-24 text-gray-500" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
     <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
   </svg>
 );
-// ---
 
-// --- (ProfileEditorProps) ---
+
+// --- (ProfileEditor コンポーネント) ---
 interface ProfileEditorProps {
   handleProfileSubmit: (e: FormEvent) => Promise<void>;
   nickname: string;
   setNickname: (val: string) => void;
-  profileImageUrl: string | null;
+  profileImageUrl: string | null; // URL または null
   bio: string;
   setBio: (val: string) => void;
   loading: boolean;
   spotifyProfile: SpotifyProfile | null;
+  // ▼▼▼ 修正: HTMLInputElement に変更 ▼▼▼
   onFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
+  // ▲▲▲ 修正ここまで ▲▲▲
   uploading: boolean;
 }
 
 const ProfileEditor = ({
+  // ▼▼▼ 修正: isNewUser を削除 ▼▼▼
   handleProfileSubmit,
+  // ▲▲▲ 修正ここまで ▲▲▲
   nickname,
   setNickname,
   profileImageUrl,
@@ -97,7 +103,7 @@ const ProfileEditor = ({
         </div>
         {/* ▲▲▲ 修正ここまで ▲▲▲ */}
 
-        {/* ... (以降、<ProfileEditor> の残りの部分は変更なし) ... */}
+        {/* Spotifyアカウント表示 */}
         {spotifyProfile && (
           <div>
             <label className="block text-white text-sm font-bold mb-2">Spotifyアカウント</label>
@@ -117,6 +123,7 @@ const ProfileEditor = ({
           </div>
         )}
 
+        {/* ニックネーム入力欄 */}
         <div>
           <label htmlFor="nickname" className="block text-white text-sm font-bold mb-2">ニックネーム <span className="text-red-500">*</span></label>
           <input
@@ -129,6 +136,7 @@ const ProfileEditor = ({
           />
         </div>
         
+        {/* 自己紹介文 */}
         <div>
           <label htmlFor="bio" className="block text-white text-sm font-bold mb-2">自己紹介文 (任意)</label>
           <textarea
@@ -139,6 +147,7 @@ const ProfileEditor = ({
           ></textarea>
         </div>
         
+        {/* 保存ボタン */}
         <div className="flex justify-start">
           <button
             type="submit"
@@ -155,8 +164,7 @@ const ProfileEditor = ({
 // --- (ProfileEditor ここまで) ---
 
 
-// --- (メインの Profile コンポーネント) ---
-// (※ ProfileEditor 以外は前回の回答から変更ありません)
+// --- メインコンポーネント (Profile ページ) ---
 export default function Profile() {
   const router = useRouter();
   const { access_token: query_token } = router.query as { access_token?: string };
@@ -241,8 +249,9 @@ export default function Profile() {
     fetchData();
   }, [accessToken]);
 
-  // ファイル選択ハンドラ
+  // ▼▼▼ 修正: HTMLInputElement に変更 ▼▼▼
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+  // ▲▲▲ 修正ここまで ▲▲▲
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setSelectedFile(file);
@@ -334,7 +343,9 @@ export default function Profile() {
       
       {/* 1. プロフィール編集フォーム */}
       <ProfileEditor
+        // ▼▼▼ 修正: isNewUser プロップを削除 ▼▼▼
         handleProfileSubmit={handleProfileSubmit}
+        // ▲▲▲ 修正ここまで ▲▲▲
         nickname={nickname}
         setNickname={setNickname}
         profileImageUrl={profileImageUrl}
