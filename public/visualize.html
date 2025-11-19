@@ -34,8 +34,8 @@
   <div id="cy"></div>
 
   <script>
-    // 3. graph.json を非同期で読み込む
-    fetch('graph.json')
+    // 3. APIから直接データを読み込む
+    fetch('http://localhost:3000/api/admin/get-graph-data?secret=LPXzQYk7gWv6h8v9')
       .then(response => response.json())
       .then(graphData => {
         
